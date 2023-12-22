@@ -19,20 +19,29 @@ from scene import Scene, GaussianModel
 from utils.general_utils import safe_state
 import uuid
 from tqdm import tqdm
+from scene.cameras import camera_generator
 from utils.image_utils import psnr
 from argparse import ArgumentParser, Namespace
 from arguments import ModelParams, PipelineParams, OptimizationParams
+#from coarse_room.trajectories.trajectory_util import _rot360
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
+
 try:
     from torch.utils.tensorboard import SummaryWriter
     TENSORBOARD_FOUND = True
 except ImportError:
     TENSORBOARD_FOUND = False
 
-def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from):
+def training(dataset, opt, pipe, 
+             testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, 
+             debug_from,num_cameras):
     first_iter = 0
     tb_writer = prepare_output_and_logger(dataset)
     gaussians = GaussianModel(dataset.sh_degree)
     scene = Scene(dataset, gaussians)
+    cameras = camera_generator(scene.bbox,num_cameras,scene.fovx,scene.fovy,scene.width,scene.height)
+
     gaussians.training_setup(opt)
     if checkpoint:
         (model_params, first_iter) = torch.load(checkpoint)
@@ -44,7 +53,6 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     iter_start = torch.cuda.Event(enable_timing = True)
     iter_end = torch.cuda.Event(enable_timing = True)
 
-    viewpoint_stack = None
     ema_loss_for_log = 0.0
     progress_bar = tqdm(range(first_iter, opt.iterations), desc="Training progress")
     first_iter += 1
@@ -67,25 +75,26 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         iter_start.record()
 
         gaussians.update_learning_rate(iteration)
-
+    
         # Every 1000 its we increase the levels of SH up to a maximum degree
         if iteration % 1000 == 0:
             gaussians.oneupSHdegree()
-
-        # Pick a random Camera
-        if not viewpoint_stack:
-            viewpoint_stack = scene.getTrainCameras().copy()
-        viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
-
-        # Render
+               
         if (iteration - 1) == debug_from:
             pipe.debug = True
+        ###渲染可视化
+        
+        #随机生成相机
+        viewpoint_stack = cameras.genCameras(opengl= True)
 
         bg = torch.rand((3), device="cuda") if opt.random_background else background
-
-        render_pkg = render(viewpoint_cam, gaussians, pipe, bg)
-        image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
-
+        for i in range(num_cameras):
+            viewpoint_cam = viewpoint_stack[i]
+            render_pkg = render(viewpoint_cam, gaussians, pipe, bg)
+            image, depth,viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["depth"],render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
+            plt.imshow(depth.cpu().detach().numpy().transpose(1,2,0))
+            plt.axis('off')
+            plt.show()
         # Loss
         gt_image = viewpoint_cam.original_image.cuda()
         Ll1 = l1_loss(image, gt_image)
@@ -196,6 +205,7 @@ if __name__ == "__main__":
     lp = ModelParams(parser)
     op = OptimizationParams(parser)
     pp = PipelineParams(parser)
+    parser.add_argument('--num_cameras', type = int, default=8)
     parser.add_argument('--ip', type=str, default="127.0.0.1")
     parser.add_argument('--port', type=int, default=6009)
     parser.add_argument('--debug_from', type=int, default=-1)
@@ -216,7 +226,7 @@ if __name__ == "__main__":
     # Start GUI server, configure and run training
     network_gui.init(args.ip, args.port)
     torch.autograd.set_detect_anomaly(args.detect_anomaly)
-    training(lp.extract(args), op.extract(args), pp.extract(args), args.test_iterations, args.save_iterations, args.checkpoint_iterations, args.start_checkpoint, args.debug_from)
+    training(lp.extract(args), op.extract(args), pp.extract(args), args.test_iterations, args.save_iterations, args.checkpoint_iterations, args.start_checkpoint, args.debug_from, args.num_cameras)
 
     # All done
     print("\nTraining complete.")

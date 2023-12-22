@@ -13,11 +13,13 @@ import os
 import random
 import json
 from utils.system_utils import searchForMaxIteration
+from utils.graphics_utils import BasicPointCloud
 from scene.dataset_readers import sceneLoadTypeCallbacks
 from scene.gaussian_model import GaussianModel
 from arguments import ModelParams
 from utils.camera_utils import cameraList_from_camInfos, camera_to_JSON
-
+import open3d as o3d
+import numpy as np
 class Scene:
 
     gaussians : GaussianModel
@@ -29,7 +31,10 @@ class Scene:
         self.model_path = args.model_path
         self.loaded_iter = None
         self.gaussians = gaussians
-
+        self.fovx = 1
+        self.fovy = 1
+        self.width = 512
+        self.height = 512
         if load_iteration:
             if load_iteration == -1:
                 self.loaded_iter = searchForMaxIteration(os.path.join(self.model_path, "point_cloud"))
@@ -40,47 +45,26 @@ class Scene:
         self.train_cameras = {}
         self.test_cameras = {}
 
-        if os.path.exists(os.path.join(args.source_path, "sparse")):
-            scene_info = sceneLoadTypeCallbacks["Colmap"](args.source_path, args.images, args.eval)
-        elif os.path.exists(os.path.join(args.source_path, "transforms_train.json")):
-            print("Found transforms_train.json file, assuming Blender data set!")
-            scene_info = sceneLoadTypeCallbacks["Blender"](args.source_path, args.white_background, args.eval)
+        ###这里为修改的点云数据加载
+        if os.path.exists(os.path.join(args.source_path,'scene_pcd.ply')):
+            pcd = o3d.io.read_point_cloud(os.path.join(args.source_path,'scene_pcd.ply'))
+            
+            scene_info = BasicPointCloud(
+                np.array(pcd.points),
+                np.array(pcd.colors),
+                np.repeat(np.array([0,0,0]),np.array(pcd.colors).shape[0],axis=0)
+            )
         else:
-            assert False, "Could not recognize scene type!"
+            print(f"{args.model_path}/scene_pcd.ply is not exists")
+        
+        scene_bbox = pcd.get_axis_aligned_bounding_box()
+        scene_bbox = np.vstack((scene_bbox.min_bound,scene_bbox.max_bound))
+        self.bbox = scene_bbox
+        self.cameras_extent = np.max((scene_bbox[1]-scene_bbox[0])/2)
 
-        if not self.loaded_iter:
-            with open(scene_info.ply_path, 'rb') as src_file, open(os.path.join(self.model_path, "input.ply") , 'wb') as dest_file:
-                dest_file.write(src_file.read())
-            json_cams = []
-            camlist = []
-            if scene_info.test_cameras:
-                camlist.extend(scene_info.test_cameras)
-            if scene_info.train_cameras:
-                camlist.extend(scene_info.train_cameras)
-            for id, cam in enumerate(camlist):
-                json_cams.append(camera_to_JSON(id, cam))
-            with open(os.path.join(self.model_path, "cameras.json"), 'w') as file:
-                json.dump(json_cams, file)
-
-        if shuffle:
-            random.shuffle(scene_info.train_cameras)  # Multi-res consistent random shuffling
-            random.shuffle(scene_info.test_cameras)  # Multi-res consistent random shuffling
-
-        self.cameras_extent = scene_info.nerf_normalization["radius"]
-
-        for resolution_scale in resolution_scales:
-            print("Loading Training Cameras")
-            self.train_cameras[resolution_scale] = cameraList_from_camInfos(scene_info.train_cameras, resolution_scale, args)
-            print("Loading Test Cameras")
-            self.test_cameras[resolution_scale] = cameraList_from_camInfos(scene_info.test_cameras, resolution_scale, args)
-
-        if self.loaded_iter:
-            self.gaussians.load_ply(os.path.join(self.model_path,
-                                                           "point_cloud",
-                                                           "iteration_" + str(self.loaded_iter),
-                                                           "point_cloud.ply"))
-        else:
-            self.gaussians.create_from_pcd(scene_info.point_cloud, self.cameras_extent)
+        self.camera_position = (scene_bbox[0]+scene_bbox[1]) * np.array([0.5,0.5,0.5])
+        
+        self.gaussians.create_from_pcd(scene_info, self.cameras_extent)
 
     def save(self, iteration):
         point_cloud_path = os.path.join(self.model_path, "point_cloud/iteration_{}".format(iteration))
