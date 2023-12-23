@@ -189,3 +189,5 @@ outputs-gradio/
 wandb/
 outputs/
 load/
+
+.ply
