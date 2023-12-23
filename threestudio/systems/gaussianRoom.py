@@ -14,7 +14,7 @@ from gaussiansplatting.scene.cameras import Camera
 from gaussiansplatting.utils.sh_utils import SH2RGB
 from gaussiansplatting.scene.gaussian_model import BasicPointCloud
 
-from scene_pc_utils import load_scene_pcd, load_ply
+from scene_pc_utils import load_scene_pcd, save_ply
 
 from argparse import ArgumentParser, Namespace
 import os
@@ -87,7 +87,7 @@ class GaussianRoom(BaseLift3DSystem):
             image =  image.permute(1, 2, 0)
             images.append(image)
             depths.append(depth)
-            
+            # TODO :
 
 
 
@@ -112,6 +112,7 @@ class GaussianRoom(BaseLift3DSystem):
         self.gaussian.update_learning_rate(self.true_global_step)
 
         render_out = self.forward(batch) # batch 为相机参数
+        # TODO : 在这里加入保存代码，将每次Gaussian渲染的结果保存，从而测试相机参数是否正确
 
         prompt_utils = self.prompt_processor()
         images = render_out["comp_rgb"]
@@ -325,7 +326,7 @@ class GaussianRoom(BaseLift3DSystem):
         
         o3d.io.write_point_cloud(self.get_save_path("shape.ply"), self.point_cloud)
         self.save_gif_to_file(self.shapeimages, self.get_save_path("shape.gif"))
-        load_ply(save_path,self.get_save_path(f"it{self.true_global_step}-test-color.ply"))
+        save_ply(save_path,self.get_save_path(f"it{self.true_global_step}-test-color.ply"))
     
         
     def configure_optimizers(self):
@@ -336,8 +337,11 @@ class GaussianRoom(BaseLift3DSystem):
         point_cloud, self.cameras_extent = load_scene_pcd(self.load_path)
         
         self.gaussian.create_from_pcd(point_cloud, self.cameras_extent)
-
-        self.pipe = PipelineParams(self.parser)
+        
+        # * Test Initialization
+        # self.gaussian.save_ply("./test.ply")
+        
+        self.pipe = PipelineParams(self.parser) 
         self.gaussian.training_setup(opt)
         
         ret = {

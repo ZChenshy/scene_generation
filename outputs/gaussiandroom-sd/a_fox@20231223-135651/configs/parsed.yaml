@@ -1,0 +1,77 @@
+name: gaussiandroom-sd
+description: ''
+tag: a_fox
+seed: 0
+use_timestamp: true
+timestamp: '@20231223-135651'
+exp_root_dir: outputs
+exp_dir: outputs/gaussiandroom-sd
+trial_name: a_fox@20231223-135651
+trial_dir: outputs/gaussiandroom-sd/a_fox@20231223-135651
+n_gpus: 1
+resume: null
+data_type: random-outward-camera-datamodule
+data:
+  batch_size: 4
+  eval_camera_distance: 4.0
+  camera_distance_range:
+  - 1.5
+  - 4.0
+  light_sample_strategy: dreamfusion3dgs
+  height: 1024
+  width: 1024
+  eval_height: 1024
+  eval_width: 1024
+system_type: gaussianroom-system
+system:
+  load_path: ./scene_pcd/LivingRoom-4719/scene_pcd.ply
+  radius: 4.0
+  sh_degree: 0
+  prompt_processor_type: stable-diffusion-prompt-processor
+  prompt_processor:
+    pretrained_model_name_or_path: /remote-home/share/Models/stabilityai/stable-diffusion-2-1-base
+    prompt: a fox
+    negative_prompt: ugly, bad anatomy, blurry, pixelated obscure, unnatural colors,
+      poor lighting, dull, and unclear, cropped, lowres, low quality, artifacts, duplicate,
+      morbid, mutilated, poorly drawn face, deformed, dehydrated, bad proportions,
+      unfocused
+  guidance_type: stable-diffusion-guidance
+  guidance:
+    pretrained_model_name_or_path: /remote-home/share/Models/stabilityai/stable-diffusion-2-1-base
+    guidance_scale: 100.0
+    weighting_strategy: sds
+    min_step_percent: 0.02
+    max_step_percent: 0.98
+    grad_clip:
+    - 0
+    - 1.5
+    - 2.0
+    - 1000
+  loggers:
+    wandb:
+      enable: false
+      project: threestudio
+      name: None
+  loss:
+    lambda_sds: 1.0
+    lambda_sparsity: 1.0
+    lambda_opaque: 0.0
+  optimizer:
+    name: Adam
+    args:
+      lr: 0.001
+      betas:
+      - 0.9
+      - 0.99
+      eps: 1.0e-15
+trainer:
+  max_steps: 1200
+  log_every_n_steps: 1
+  num_sanity_val_steps: 0
+  val_check_interval: 100
+  enable_progress_bar: true
+  precision: 16-mixed
+checkpoint:
+  save_last: true
+  save_top_k: -1
+  every_n_train_steps: 1200

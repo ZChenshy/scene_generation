@@ -1,0 +1,2 @@
+python /remote-home/hzp/scene_generation/launch.py --config configs/gaussianRoom-sd.yaml --train --gpu 3 system.prompt_processor.prompt='a fox'
+Namespace(config='configs/gaussianRoom-sd.yaml', export=False, gpu='3', gradio=False, test=False, train=True, typecheck=False, validate=False, verbose=False)
