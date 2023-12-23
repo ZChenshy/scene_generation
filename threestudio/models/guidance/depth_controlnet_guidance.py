@@ -15,11 +15,11 @@ from threestudio.utils.ops import perpendicular_component
 from threestudio.utils.typing import *
 
 
-@threestudio.register("stable-diffusion-guidance")
+@threestudio.register("depth-controlnet-guidance")
 class StableDiffusionGuidance(BaseObject):
     @dataclass
     class Config(BaseObject.Config):
-        pretrained_model_name_or_path: str = "runwayml/stable-diffusion-v1-5"
+        pretrained_model_name_or_path: str = "controlnet-depth-sdxl-1.0-mid"
         enable_memory_efficient_attention: bool = False
         enable_sequential_cpu_offload: bool = False
         enable_attention_slicing: bool = False
