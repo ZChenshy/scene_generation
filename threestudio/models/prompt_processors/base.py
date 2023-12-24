@@ -295,6 +295,7 @@ class PromptProcessor(BaseObject):
 
         with open(os.path.join("load/prompt_library.json"), "r") as f:
             self.prompt_library = json.load(f)
+            
         # use provided prompt or find prompt in library
         self.prompt = self.preprocess_prompt(self.cfg.prompt)
         # use provided negative prompt

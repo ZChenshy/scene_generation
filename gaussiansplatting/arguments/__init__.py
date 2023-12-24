@@ -68,7 +68,8 @@ class PipelineParams(ParamGroup):
         self.debug = False
         super().__init__(parser, "Pipeline Parameters")
 
-class OptimizationParams(ParamGroup): # * 参数与3D Gaussian有差别
+
+class OptimizationParams(ParamGroup): # !参数与3D Gaussian有差别
     def __init__(self, parser):
         self.iterations = 3_200
         self.position_lr_init = 0.00005
