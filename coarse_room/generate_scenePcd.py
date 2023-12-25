@@ -91,26 +91,29 @@ class scene_loader:
                 scene.colors = o3d.utility.Vector3dVector(np.concatenate([np.asarray(scene.colors), np.asarray(pcd.colors)]))
     
         
-        
+        points = np.asarray(scene.points)
+        points[:, [1,2]] = points[:, [2,1]]
+        scene.points = o3d.utility.Vector3dVector(points)
         scene = self.normal_scene(scene)
         scene_savedir = os.path.join(self.output_path,self.scene_id,self.room_id,"scene_pcd.ply")
         os.makedirs(os.path.dirname(scene_savedir), exist_ok=True)
         with open(self.color_label_dict_json , 'w') as f:
             json.dump(self.color_label_dict,f)
         o3d.io.write_point_cloud(scene_savedir, scene)
+        vis_pc(scene)
         return scene
     
     def normal_scene(self,scene):
         points = scene.points
         scene_bounding_box = scene.get_axis_aligned_bounding_box()
         scene_bbox = np.vstack((scene_bounding_box.min_bound,scene_bounding_box.max_bound))
-        scale_factor = 1.0 / (scene_bbox[1][1] - scene_bbox[0][1])  #y轴是高度轴,将y轴缩放到长度为1，其他轴按比例缩放
-        scaled_points = (points - scene_bbox[0]) * np.array([scale_factor, -scale_factor, scale_factor])
+        scale_factor = 1.0 / (scene_bbox[1][2] - scene_bbox[0][2])  #z轴是高度轴,将y轴缩放到长度为1，其他轴按比例缩放
+        scaled_points = (points - scene_bbox[0]) * np.array([scale_factor, scale_factor, -scale_factor])
         
         #平移点云
         new_min = scaled_points.min(axis=0)
         new_max = scaled_points.max(axis=0)
-        bottom_center = np.array([new_min[0] + new_max[0], 2 * new_min[1], new_min[2] + new_max[2]]) / 2
+        bottom_center = np.array([new_min[0] + new_max[0], new_min[1]+new_max[1], 2 * new_min[2]]) / 2
         translated_points = scaled_points - bottom_center
         scene.points = o3d.utility.Vector3dVector(translated_points)
 
