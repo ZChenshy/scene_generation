@@ -64,8 +64,10 @@ def vis_pc(pcd):
     # 获取视图控制器
     
     vis = o3d.visualization.Visualizer()
+    coordinate_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.6, origin=[0, 0, 0])
     vis.create_window(width=800, height=600)  
     vis.add_geometry(pcd)
+    vis.add_geometry(coordinate_frame)
 
     vis.poll_events()
     vis.update_renderer()
