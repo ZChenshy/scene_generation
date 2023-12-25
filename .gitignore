@@ -177,7 +177,8 @@ pyrightconfig.json
 
 .vscode/
 .threestudio_cache/
-outputs/
+outputs/*
+/outputs/
 outputs-gradio/
 
 # pretrained model weights
