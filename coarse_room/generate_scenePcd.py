@@ -12,6 +12,7 @@ import open3d as o3d
 import utils
 from random import randint
 import math
+from utils import vis_pc
 
 class scene_loader:
     def __init__(self,scene_path,models_path,room_id,scene_id, output_path = '/remote-home/share/room_gen/roomPCD'):
@@ -79,7 +80,7 @@ class scene_loader:
             '4':'wall',
             '5':'wall'
             }
-        
+        #按照需求添加自己需要的
         for i,pcd in enumerate(scene_bbox_pc):
             semantic_color = self.update_color_dict(extra_dict[str(i)])
             if i==3:
@@ -88,14 +89,33 @@ class scene_loader:
                 pcd.colors = o3d.utility.Vector3dVector(pcd_colors)
                 scene.points = o3d.utility.Vector3dVector(np.concatenate([np.asarray(scene.points), np.asarray(pcd.points)]))
                 scene.colors = o3d.utility.Vector3dVector(np.concatenate([np.asarray(scene.colors), np.asarray(pcd.colors)]))
+    
         
-
+        
+        scene = self.normal_scene(scene)
         scene_savedir = os.path.join(self.output_path,self.scene_id,self.room_id,"scene_pcd.ply")
         os.makedirs(os.path.dirname(scene_savedir), exist_ok=True)
         with open(self.color_label_dict_json , 'w') as f:
             json.dump(self.color_label_dict,f)
         o3d.io.write_point_cloud(scene_savedir, scene)
         return scene
+    
+    def normal_scene(self,scene):
+        points = scene.points
+        scene_bounding_box = scene.get_axis_aligned_bounding_box()
+        scene_bbox = np.vstack((scene_bounding_box.min_bound,scene_bounding_box.max_bound))
+        scale_factor = 1.0 / (scene_bbox[1][1] - scene_bbox[0][1])  #y轴是高度轴,将y轴缩放到长度为1，其他轴按比例缩放
+        scaled_points = (points - scene_bbox[0]) * np.array([scale_factor, -scale_factor, scale_factor])
+        
+        #平移点云
+        new_min = scaled_points.min(axis=0)
+        new_max = scaled_points.max(axis=0)
+        bottom_center = np.array([new_min[0] + new_max[0], 2 * new_min[1], new_min[2] + new_max[2]]) / 2
+        translated_points = scaled_points - bottom_center
+        scene.points = o3d.utility.Vector3dVector(translated_points)
+
+        return scene
+
     def update_color_dict(self,label):
         #This function is used to check whether the label has a color. If not, it will be added to the dictionary
             if label not in self.color_label_dict:
@@ -148,6 +168,14 @@ class scene_loader:
         pcd.colors = o3d.utility.Vector3dVector(pcd_colors)
 
         return pcd
-
+    
+if __name__== "__main__":
+    scene_path = "/remote-home/share/room_gen/3D-FRONT-parsed"
+    models_path = "/remote-home/share/room_gen/dreamGaussian_gen"
+    scene_id = "4944051f-3a7e-4387-b5f3-f925ae6da57e"
+    room_id = "SecondBedroom-1338"
+    scene =scene_loader(scene_path,models_path,room_id,scene_id)
+    _ = scene.generate_scene()
+    
 
 

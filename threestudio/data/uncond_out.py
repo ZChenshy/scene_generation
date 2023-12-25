@@ -579,3 +579,5 @@ class RandomCameraDataModule(pl.LightningDataModule):
         return self.general_loader(
             self.test_dataset, batch_size=1, collate_fn=self.test_dataset.collate
         )
+    
+
