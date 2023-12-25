@@ -14,11 +14,14 @@ data:
   width: 1024
   eval_height: 1024
   eval_width: 1024
-  # elevation_range: [-10 , 80]
-  
+  elevation_range: [89.5, 90]
+  fix_elevation_deg: 90 #角度制
+  fix_azimuth_deg: 0 #角度制
+  fix_camera_distance: 1.2
+  fix_fovy_deg: 60 #角度制 
 system_type: "gaussianroom-system"
 system:
-  load_path: "./scene_pcd/LivingRoom-4719/scene_pcd.ply"
+  load_path: "/remote-home/share/room_gen/roomPCD/4944051f-3a7e-4387-b5f3-f925ae6da57e/LivingRoom-4719/scene_pcd.ply"
   radius: ${data.eval_camera_distance}
   sh_degree: 0
   prompt_processor_type: "stable-diffusion-prompt-processor"

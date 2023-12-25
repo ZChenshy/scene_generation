@@ -173,7 +173,7 @@ if __name__== "__main__":
     scene_path = "/remote-home/share/room_gen/3D-FRONT-parsed"
     models_path = "/remote-home/share/room_gen/dreamGaussian_gen"
     scene_id = "4944051f-3a7e-4387-b5f3-f925ae6da57e"
-    room_id = "SecondBedroom-1338"
+    room_id = "LivingRoom-4719"
     scene =scene_loader(scene_path,models_path,room_id,scene_id)
     _ = scene.generate_scene()
     
