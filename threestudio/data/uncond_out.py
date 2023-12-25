@@ -699,14 +699,12 @@ class RandomCameraIterableDatasetCustom(IterableDataset, Updateable):
         #     dim=-1,
         # )
 
-        #注意坐标系的不同。在这里，y 对应 up，x 对应 right，z 对应 front
+        #注意坐标系的不同。在这里，z 对应 up，x 对应 right，y 对应 front
         camera_positions = torch.stack(
             [
-                
-                camera_distances * torch.cos(elevation) * torch.sin(azimuth), # 轴
-                camera_distances * torch.cos(elevation) * torch.cos(azimuth), # 轴
-
-                camera_distances * torch.sin(elevation),                      # 轴
+                camera_distances * torch.cos(elevation) * torch.cos(azimuth), 
+                camera_distances * torch.cos(elevation) * torch.sin(azimuth), 
+                camera_distances * torch.sin(elevation),
             ],
             dim=-1,
         )
@@ -716,7 +714,7 @@ class RandomCameraIterableDatasetCustom(IterableDataset, Updateable):
         # 场景的长宽高，把高变换到[-1,1]
         center: Float[Tensor, "B 3"] = torch.zeros_like(camera_positions)
         # default camera up direction as +z
-        up: Float[Tensor, "B 3"] = torch.as_tensor([0 , 0 , -1], dtype=torch.float32)[
+        up: Float[Tensor, "B 3"] = torch.as_tensor([0 , 0 , 1], dtype=torch.float32)[
             None, :
         ].repeat(self.batch_size, 1)
 
@@ -736,8 +734,8 @@ class RandomCameraIterableDatasetCustom(IterableDataset, Updateable):
         step = 2 * math.pi / self.batch_size
         for i in range(self.batch_size):
             angle = step * i + torch.rand(1) * (step - 0.00001)
-            dx_dis = torch.normal(1.0, 0.2, size = ()) * 1.2
-            dy_dis = torch.normal(1.0, 0.2, size = ()) * 1.2
+            dx_dis = torch.normal(1.0, 0.2, size = ())
+            dy_dis = torch.normal(1.0, 0.2, size = ()) 
             dx_dis = torch.clamp(dx_dis, 0, 2 * self.fix_camera_distance) * math.cos(angle)
             dy_dis = torch.clamp(dy_dis, 0, 2 * self.fix_camera_distance) * math.sin(angle)
             dz_dis = torch.rand(1) * 0 * self.fix_camera_distance
