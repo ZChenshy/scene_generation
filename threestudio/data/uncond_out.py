@@ -585,6 +585,9 @@ class RandomCameraDataModule(pl.LightningDataModule):
         )
     
 class RandomCameraIterableDatasetCustom(IterableDataset, Updateable):
+    """
+    具体实现在collate
+    """
     def __init__(self, cfg: Any) -> None:
         super().__init__()
         self.cfg: RandomCameraDataModuleConfig = cfg
@@ -674,6 +677,12 @@ class RandomCameraIterableDatasetCustom(IterableDataset, Updateable):
         # ]
 
     def collate(self, batch) -> Dict[str, Any]:
+        """
+        使用球坐标系表示相机位置，由elevation.azimuth,camera_distance三个参数确定相机的位置。
+        默认以原点为球心，camera_distance为半径。固定elevation为 pi/2(90度)，即可固定相机的位置
+        在本场景表示中，z轴是向上的，这点与原始3dgs是不同的
+
+        """
         elevation_deg: Float[Tensor, "B"]
         elevation: Float[Tensor, "B"]
         elevation_deg = torch.full((self.batch_size,),self.fix_elevation_deg)
@@ -710,10 +719,12 @@ class RandomCameraIterableDatasetCustom(IterableDataset, Updateable):
         )
 
         # default scene center at origin
-        # 需要把初始场景中心放置在原点
-        # 场景的长宽高，把高变换到[-1,1]
+        # 默认初始场景中心放置在原点
+        # 场景的长宽高，把高标准化到[0,1]
         center: Float[Tensor, "B 3"] = torch.zeros_like(camera_positions)
+
         # default camera up direction as +z
+        # 如果实际渲染结果，画面是颠倒的，可以把up向量[0,0,1]调节为[0,0,-1]
         up: Float[Tensor, "B 3"] = torch.as_tensor([0 , 0 , 1], dtype=torch.float32)[
             None, :
         ].repeat(self.batch_size, 1)
@@ -727,9 +738,10 @@ class RandomCameraIterableDatasetCustom(IterableDataset, Updateable):
         
         #生成相机的观察中心
         #target = center + [dx_dis * x_sign, dy_dis, dz_dis* z_sign]
-        #dx_dis 与 dz_dis使用正态分布采样，取值范围在[0, 2]
-        #dy_dis 采取均匀分布采样，取值范围在[0, 0.4]
+        #dx_dis 与 dy_dis使用正态分布采样，取值范围在[0, 2]
+        #dz_dis 采取均匀分布采样，取值范围在[0, 0.4]
         #x_sign, z_sign 根据 旋转角度来确定象限符号
+        #根据需求可以固定dx_dis, dy_dis, dz_dis的大小
         target_points: Float[Tensor, "B 3"] = center
         step = 2 * math.pi / self.batch_size
         for i in range(self.batch_size):
@@ -738,7 +750,7 @@ class RandomCameraIterableDatasetCustom(IterableDataset, Updateable):
             dy_dis = torch.normal(1.0, 0.2, size = ()) 
             dx_dis = torch.clamp(dx_dis, 0, 2 * self.fix_camera_distance) * math.cos(angle)
             dy_dis = torch.clamp(dy_dis, 0, 2 * self.fix_camera_distance) * math.sin(angle)
-            dz_dis = torch.rand(1) * 0 * self.fix_camera_distance
+            dz_dis = torch.rand(1) * 0.2 * self.fix_camera_distance
             target_points[i, :] = target_points[i, :] + torch.tensor([dx_dis, dy_dis, dz_dis])
         # sample center perturbations from a normal distribution with mean 0 and std center_perturb
         # center_perturb: Float[Tensor, "B 3"] = (
@@ -812,7 +824,10 @@ class RandomCameraIterableDatasetCustom(IterableDataset, Updateable):
 
         lookat: Float[Tensor, "B 3"] = F.normalize(target_points - camera_positions, dim=-1)
         right: Float[Tensor, "B 3"] = F.normalize(torch.cross(lookat, up), dim=-1)
+
+        #修正up向量
         up = F.normalize(torch.cross(right, lookat), dim=-1)
+
         c2w3x4: Float[Tensor, "B 3 4"] = torch.cat(
             [torch.stack([right, up, -lookat], dim=-1), camera_positions[:, :, None]],
             dim=-1,
@@ -862,7 +877,7 @@ class RandomCameraIterableDatasetCustom(IterableDataset, Updateable):
 
 
 
-
+        #实际上并未使用c2w_3dgs，请注意
         return {
             "mvp_mtx": mvp_mtx,
             "camera_positions": camera_positions,
