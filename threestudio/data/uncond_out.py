@@ -741,7 +741,8 @@ class RandomCameraIterableDatasetCustom(IterableDataset, Updateable):
         #dx_dis 与 dy_dis使用正态分布采样，取值范围在[0, 2]
         #dz_dis 采取均匀分布采样，取值范围在[0, 0.4]
         #x_sign, z_sign 根据 旋转角度来确定象限符号
-        #根据需求可以固定dx_dis, dy_dis, dz_dis的大小
+        #根据需求手动设定dx_dis, dy_dis, dz_dis的大小，以此来调节相机仰角。
+        #具体来说，dx_dis, dy_dis, dz_dis越大，相机仰角就越大。
         target_points: Float[Tensor, "B 3"] = center
         step = 2 * math.pi / self.batch_size
         for i in range(self.batch_size):
