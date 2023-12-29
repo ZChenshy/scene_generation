@@ -10,8 +10,8 @@ data:
   eval_camera_distance: 4.0
   camera_distance_range: [1.5, 4.0]
   light_sample_strategy: "dreamfusion3dgs"
-  height: 1024
-  width: 1024
+  height: 512
+  width: 512
   eval_height: 1024
   eval_width: 1024
   # elevation_range: [-10 , 80]

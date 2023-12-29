@@ -180,7 +180,6 @@ pyrightconfig.json
 outputs/*
 /outputs/
 outputs-gradio/
-/remote-home/hzp/scene_generation/outputs
 # pretrained model weights
 *.ckpt
 *.pt

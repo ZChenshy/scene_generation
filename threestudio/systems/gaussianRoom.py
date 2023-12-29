@@ -64,36 +64,27 @@ class GaussianRoom(BaseLift3DSystem):
         self.viewspace_point_list = []
         for id in range(batch['c2w_3dgs'].shape[0]):
        
-            viewpoint_cam  = Camera(c2w = batch['c2w_3dgs'][id],FoVy = batch['fovy'][id],height = batch['height'],width = batch['width'])
-
+            viewpoint_cam  = Camera(c2w = batch['c2w_3dgs'][id], FoVy = batch['fovy'][id], height = batch['height'], width = batch['width'])
 
             render_pkg = render(viewpoint_cam, self.gaussian, self.pipe, renderbackground)
             image, viewspace_point_tensor, _, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
             self.viewspace_point_list.append(viewspace_point_tensor)
-
             
             if id == 0:
-
                 self.radii = radii
             else:
-
-
                 self.radii = torch.max(radii,self.radii)
                 
-            
             depth = render_pkg["depth_3dgs"]
             depth =  depth.permute(1, 2, 0)
             
             image =  image.permute(1, 2, 0)
             images.append(image)
             depths.append(depth)
-            # TODO :
-
-
 
         images = torch.stack(images, 0)
         depths = torch.stack(depths, 0)
-        self.visibility_filter = self.radii>0.0
+        self.visibility_filter = self.radii > 0.0
         render_pkg["comp_rgb"] = images
         render_pkg["depth"] = depths
         render_pkg["opacity"] = depths / (depths.max() + 1e-5)
@@ -114,20 +105,21 @@ class GaussianRoom(BaseLift3DSystem):
         render_out = self.forward(batch) # batch 为相机参数
         # TODO : 在这里加入保存代码，将每次Gaussian渲染的结果保存，从而测试相机参数是否正确
 
-        prompt_utils = self.prompt_processor()
+        prompt_utils = self.prompt_processor() # TODO: 确定PromptProcessor的View-Dependent是否还需要
         images = render_out["comp_rgb"]
-
-
+        depth_images = render_out["depth"]
+        
         guidance_eval = (self.true_global_step % 200 == 0)
         # guidance_eval = False
         
         guidance_out = self.guidance(
-            images, prompt_utils, **batch, rgb_as_latents=False,guidance_eval=guidance_eval
+            rgb=images, image_cond=depth_images, prompt_utils=prompt_utils, **batch, rgb_as_latents=False
+            # guidance_eval=guidance_eval
         )
 
         loss = 0.0
 
-        loss = loss + guidance_out['loss_sds'] *self.C(self.cfg.loss['lambda_sds'])
+        loss = loss + guidance_out['loss_sds'] * self.C(self.cfg.loss['lambda_sds'])
         
         loss_sparsity = (render_out["opacity"] ** 2 + 0.01).sqrt().mean()
         self.log("train/loss_sparsity", loss_sparsity)
@@ -138,11 +130,11 @@ class GaussianRoom(BaseLift3DSystem):
         self.log("train/loss_opaque", loss_opaque)
         loss += loss_opaque * self.C(self.cfg.loss.lambda_opaque)
         
-        if guidance_eval:
-            self.guidance_evaluation_save(
-                render_out["comp_rgb"].detach()[: guidance_out["eval"]["bs"]],
-                guidance_out["eval"],
-            )
+        # if guidance_eval:
+        #     self.guidance_evaluation_save(
+        #         render_out["comp_rgb"].detach()[: guidance_out["eval"]["bs"]],
+        #         guidance_out["eval"],
+        #     )
             
         for name, value in self.cfg.loss.items():
             self.log(f"train_params/{name}", self.C(value))
