@@ -184,6 +184,9 @@ outputs-gradio/
 *.ckpt
 *.pt
 *.pth
+*.json
+*.jpg
+*.png
 
 # wandb
 wandb/

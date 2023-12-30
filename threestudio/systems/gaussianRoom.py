@@ -25,6 +25,9 @@ import io
 from PIL import Image  
 import open3d as o3d
 
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
+
 @threestudio.register("gaussianroom-system")
 class GaussianRoom(BaseLift3DSystem):
     @dataclass
@@ -62,12 +65,28 @@ class GaussianRoom(BaseLift3DSystem):
         images = []
         depths = []
         self.viewspace_point_list = []
+        # for id in range(batch['c2w_3dgs'].shape[0]):
+       
+        #     viewpoint_cam  = Camera(c2w = batch['c2w_3dgs'][id],FoVy = batch['fovy'][id],height = batch['height'],width = batch['width'])
+
+
+        #     render_pkg = render(viewpoint_cam, self.gaussian, self.pipe, renderbackground)
+        #     image, depth, viewspace_point_tensor, _, radii = render_pkg["render"], render_pkg["depth_3dgs"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
+        #     depth = depth.permute(1, 2, 0)
+        #     plt.imshow(depth.cpu().detach().numpy())
+        #     plt.axis('off') 
+        #     plt.show()
+        # print()
         for id in range(batch['c2w_3dgs'].shape[0]):
+            # 使用的c2w_3dgs生成，具体请查看uncond_out.py代码里的RandomCameraIterableDatasetCustom
+            #请注意RandomCameraIterableDatasetCustom 的collated的返回值：'c2w_3dgs'对应的value
+            viewpoint_cam  = Camera(c2w = batch['c2w_3dgs'][id],FoVy = batch['fovy'][id],height = batch['height'],width = batch['width'])
+
        
             viewpoint_cam  = Camera(c2w = batch['c2w_3dgs'][id], FoVy = batch['fovy'][id], height = batch['height'], width = batch['width'])
 
             render_pkg = render(viewpoint_cam, self.gaussian, self.pipe, renderbackground)
-            image, viewspace_point_tensor, _, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
+            image, depth, viewspace_point_tensor, _, radii = render_pkg["render"], render_pkg["depth_3dgs"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
             self.viewspace_point_list.append(viewspace_point_tensor)
             
             if id == 0:
