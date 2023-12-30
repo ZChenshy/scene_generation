@@ -266,7 +266,7 @@ class ControlnetGuidance(BaseObject):
     def __call__(
         self,
         rgb: Float[Tensor, "B H W C"],
-        depth_img: Float[Tensor, "B H W C"], # TODO: 对Gaussian渲染的深度图进行预处理
+        image_cond: Float[Tensor, "B H W C"], # TODO: 对Gaussian渲染的深度图进行预处理
         prompt_utils: PromptProcessorOutput,
         # elevation: Float[Tensor, "B"],
         # azimuth: Float[Tensor, "B"],
@@ -275,14 +275,14 @@ class ControlnetGuidance(BaseObject):
     ):
         batch_size = rgb.shape[0]
         assert batch_size == 1
-        assert rgb.shape[:-1] == depth_img.shape[:-1]
-        assert len(rgb.shape) == len(depth_img.shape) == 4
+        assert rgb.shape[:-1] == image_cond.shape[:-1]
+        assert len(rgb.shape) == len(image_cond.shape) == 4
         
         # TODO: 使用ViewDependtent Prompt Processor之后，需要修改
         temp = torch.zeros(1).to(rgb.device)
         text_embeddings = prompt_utils.get_text_embeddings(temp, temp, temp, False)
         
-        depth_img_BCHW = self.normalized_image(depth_img) 
+        depth_img_BCHW = self.normalized_image(image_cond) 
         
         if depth_img_BCHW.shape[1] == 1:
             depth_img_BCHW = torch.cat([depth_img_BCHW, depth_img_BCHW, depth_img_BCHW], dim=1) # 1C -> 3C
@@ -314,7 +314,7 @@ class ControlnetGuidance(BaseObject):
             device=self.device,
         )
 
-        grad, guidance_eval_utils = self.compute_grad_sds(
+        grad = self.compute_grad_sds(
             text_embeddings=text_embeddings, latents=latents, image_cond=depth_img_BCHW_512, t=t
         )
 

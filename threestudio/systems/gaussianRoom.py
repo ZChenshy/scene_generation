@@ -125,8 +125,8 @@ class GaussianRoom(BaseLift3DSystem):
         # TODO : 在这里加入保存代码，将每次Gaussian渲染的结果保存，从而测试相机参数是否正确
 
         prompt_utils = self.prompt_processor() # TODO: 确定PromptProcessor的View-Dependent是否还需要
-        images = render_out["comp_rgb"]
-        depth_images = render_out["depth"]
+        images = render_out["comp_rgb"] # BHWC c=3
+        depth_images = render_out["depth"] # BHWC c=1
         
         guidance_eval = (self.true_global_step % 200 == 0)
         # guidance_eval = False
@@ -335,15 +335,14 @@ class GaussianRoom(BaseLift3DSystem):
         # self.pointefig.savefig(self.get_save_path("pointe.png"))
         
         
-        o3d.io.write_point_cloud(self.get_save_path("shape.ply"), self.point_cloud)
-        self.save_gif_to_file(self.shapeimages, self.get_save_path("shape.gif"))
-        save_ply(save_path,self.get_save_path(f"it{self.true_global_step}-test-color.ply"))
+        # o3d.io.write_point_cloud(self.get_save_path("shape.ply"), self.point_cloud)
+        # self.save_gif_to_file(self.shapeimages, self.get_save_path("shape.gif"))
+        save_ply(save_path, self.get_save_path(f"it{self.true_global_step}-test-color.ply"))
     
         
     def configure_optimizers(self):
         self.parser = ArgumentParser(description="Training script parameters")
         
-        # TODO : 利用生成的场景点云对3D Gs进行初始化, 并对相机初始化(待测试)
         opt = OptimizationParams(self.parser)
         point_cloud, self.cameras_extent = load_scene_pcd(self.load_path)
         
