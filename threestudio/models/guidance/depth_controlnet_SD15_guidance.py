@@ -226,7 +226,7 @@ class ControlnetGuidance(BaseObject):
         self,
         text_embeddings: Float[Tensor, "BB 77 768"], # 在__call__中，从prompt_utils中获取，加入ViewDependtenPromptProcessor之后再做修改
         latents: Float[Tensor, "B 4 64 64"],
-        image_cond: Float[Tensor, "B 1 H W"], # 深度图的通道为1
+        image_cond: Float[Tensor, "B 3 H W"], # 深度图的通道为1,但ControlNet输入要求为3，因此先前已经进行了拼接
         t: Int[Tensor, "B"], 
     ):
         with torch.no_grad():
@@ -276,13 +276,24 @@ class ControlnetGuidance(BaseObject):
         batch_size = rgb.shape[0]
         assert batch_size == 1
         assert rgb.shape[:-1] == depth_img.shape[:-1]
-        
+        assert len(rgb.shape) == len(depth_img.shape) == 4
         
         # TODO: 使用ViewDependtent Prompt Processor之后，需要修改
         temp = torch.zeros(1).to(rgb.device)
         text_embeddings = prompt_utils.get_text_embeddings(temp, temp, temp, False)
         
         depth_img_BCHW = self.normalized_image(depth_img) 
+        
+        if depth_img_BCHW.shape[1] == 1:
+            depth_img_BCHW = torch.cat([depth_img_BCHW, depth_img_BCHW, depth_img_BCHW], dim=1) # 1C -> 3C
+        elif depth_img_BCHW.shape[1] == 3:
+            pass
+        else:
+            raise ValueError(f"Depth image channel should be 1 or 3, but got {depth_img_BCHW.shape[1]}")
+            
+        depth_img_BCHW_512 = F.interpolate(
+            depth_img_BCHW, (512, 512), mode="bilinear", align_corners=False
+        )
         
         rgb_BCHW = rgb.permute(0, 3, 1, 2) # B H W C -> B C H W
         rgb_BCHW = torch.clamp(rgb_BCHW, 0, 1) # Gaussian渲染图片像素值会有偏差，进行Clamp
@@ -304,7 +315,7 @@ class ControlnetGuidance(BaseObject):
         )
 
         grad, guidance_eval_utils = self.compute_grad_sds(
-            text_embeddings=text_embeddings, latents=latents, image_cond=depth_img_BCHW, t=t
+            text_embeddings=text_embeddings, latents=latents, image_cond=depth_img_BCHW_512, t=t
         )
 
         grad = torch.nan_to_num(grad)
@@ -353,14 +364,10 @@ if __name__ == "__main__":
 
     rgb_image = cv2.imread("/remote-home/hzp/test/1703820320_7791991_render.jpg")[:, :, ::-1].copy() / 255
     rgb_image = torch.FloatTensor(rgb_image).unsqueeze(0).to(guidance.device)
-    depth_image = cv2.imread("/remote-home/hzp/test/1703820320_7791991_depth.jpg").copy / 255
-    
+    depth_image = cv2.imread("/remote-home/hzp/test/1703820320_7791991_depth.jpg", cv2.IMREAD_UNCHANGED).copy() / 255
+    depth_image = torch.FloatTensor(depth_image)
+    depth_image = depth_image.unsqueeze(0).to(guidance.device) # HW -> BHW
+    depth_image = depth_image.unsqueeze(3) # BHW -> BHWC
     prompt_utils = prompt_processor()
-    guidance_out = guidance(rgb_image, rgb_image, prompt_utils)
-    edit_image = (
-        (guidance_out["edit_images"][0].detach().cpu().clip(0, 1).numpy() * 255)
-        .astype(np.uint8)[:, :, ::-1]
-        .copy()
-    )
-    os.makedirs(".threestudio_cache", exist_ok=True)
-    cv2.imwrite(".threestudio_cache/edit_image.jpg", edit_image)
+    guidance_out = guidance(rgb_image, depth_image, prompt_utils)
+    print(guidance_out)
