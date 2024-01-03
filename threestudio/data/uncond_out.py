@@ -500,8 +500,7 @@ class RandomCameraDataset(Dataset):
         c2w_3dgs = torch.stack(c2w_3dgs, 0)
         self.mvp_mtx = mvp_mtx
         self.c2w = c2w
-        self.c2w_3dgs = c2w_3dgs
-
+        self.c2w_3dgs = c2w
         self.camera_positions = camera_positions
         self.light_positions = light_positions
         self.elevation, self.azimuth = elevation, azimuth
@@ -685,16 +684,29 @@ class RandomCameraIterableDatasetCustom(IterableDataset, Updateable):
         """
         elevation_deg: Float[Tensor, "B"]
         elevation: Float[Tensor, "B"]
-        elevation_deg = torch.full((self.batch_size,),self.fix_elevation_deg)
+        elevation_deg = (
+            torch.rand(self.batch_size)
+            * (self.elevation_range[1] - self.elevation_range[0])
+            + self.elevation_range[0]
+        )
         elevation = elevation_deg * math.pi / 180
+    
         
         azimuth_deg: Float[Tensor, "B"]
         azimuth: Float[Tensor, "B"]
-        azimuth_deg = torch.full((self.batch_size,),self.fix_azimuth_deg)
+        azimuth_deg = (
+            torch.rand(self.batch_size) + torch.arange(self.batch_size)
+        ) / self.batch_size * (
+            self.azimuth_range[1] - self.azimuth_range[0]
+        ) + self.azimuth_range[0]
         azimuth = azimuth_deg * math.pi / 180
 
         camera_distances: Float[Tensor, "B"]
-        camera_distances = torch.full((self.batch_size,),self.fix_camera_distance)
+        camera_distances: Float[Tensor, "B"] = (
+            torch.rand(self.batch_size)
+            * (self.camera_distance_range[1] - self.camera_distance_range[0])
+            + self.camera_distance_range[0]
+        )
 
         # convert spherical coordinates to cartesian coordinates
         # right hand coordinate system, x back, y right, z up
@@ -744,15 +756,15 @@ class RandomCameraIterableDatasetCustom(IterableDataset, Updateable):
         #根据需求手动设定dx_dis, dy_dis, dz_dis的大小，以此来调节相机仰角。
         #具体来说，dx_dis, dy_dis, dz_dis越大，相机仰角就越大。
         target_points: Float[Tensor, "B 3"] = center
-        step = 2 * math.pi / self.batch_size
-        for i in range(self.batch_size):
-            angle = step * i + torch.rand(1) * (step - 0.00001)
-            dx_dis = torch.normal(1.0, 0.2, size = ())
-            dy_dis = torch.normal(1.0, 0.2, size = ()) 
-            dx_dis = torch.clamp(dx_dis, 0, 2 * self.fix_camera_distance) * math.cos(angle)
-            dy_dis = torch.clamp(dy_dis, 0, 2 * self.fix_camera_distance) * math.sin(angle)
-            dz_dis = torch.rand(1) * 0.2 * self.fix_camera_distance
-            target_points[i, :] = target_points[i, :] + torch.tensor([dx_dis, dy_dis, dz_dis])
+        # step = 2 * math.pi / self.batch_size
+        # for i in range(self.batch_size):
+        #     angle = step * i + torch.rand(1) * (step - 0.00001)
+        #     dx_dis = torch.normal(0.2, 0.2, size = ())
+        #     dy_dis = torch.normal(0.2, 0.2, size = ()) 
+        #     dx_dis = torch.clamp(dx_dis, 0, 0.2) * math.cos(angle)
+        #     dy_dis = torch.clamp(dy_dis, 0, 0.2) * math.sin(angle)
+        #     dz_dis = torch.rand(1) * 0.2
+        #     target_points[i, :] = target_points[i, :] + torch.tensor([dx_dis, dy_dis, dz_dis])
         # sample center perturbations from a normal distribution with mean 0 and std center_perturb
         # center_perturb: Float[Tensor, "B 3"] = (
         #     torch.randn(self.batch_size, 3) * self.cfg.center_perturb
@@ -893,3 +905,4 @@ class RandomCameraIterableDatasetCustom(IterableDataset, Updateable):
             "fovy":fovy,
 
         }
+    

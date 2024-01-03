@@ -12,7 +12,7 @@ import open3d as o3d
 import utils
 from random import randint
 import math
-from utils import vis_pc
+from coarse_room.utils import vis_pc
 
 class scene_loader:
     def __init__(self,scene_path,models_path,room_id,scene_id, output_path = '/remote-home/share/room_gen/roomPCD'):

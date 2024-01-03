@@ -6,7 +6,7 @@ import numpy as np
 import open3d as o3d
 import plydata
 from gaussiansplatting.scene.gaussian_model import BasicPointCloud
-
+from coarse_room.generate_scenePcd import scene_loader
 
 def quaternion_to_angle(quaternion):
     # To convert a quaternion matrix into angles

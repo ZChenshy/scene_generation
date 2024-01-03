@@ -5,6 +5,8 @@ import threestudio
 from threestudio.systems.base import BaseLift3DSystem
 from threestudio.utils.ops import binary_cross_entropy, dot
 from threestudio.utils.typing import *
+import time
+import numpy as np
 
 from gaussiansplatting.gaussian_renderer import render
 from gaussiansplatting.scene import Scene, GaussianModel
@@ -27,7 +29,7 @@ import open3d as o3d
 
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
-
+import cv2
 @threestudio.register("gaussianroom-system")
 class GaussianRoom(BaseLift3DSystem):
     @dataclass
@@ -65,25 +67,23 @@ class GaussianRoom(BaseLift3DSystem):
         images = []
         depths = []
         self.viewspace_point_list = []
-        # for id in range(batch['c2w_3dgs'].shape[0]):
+        for id in range(batch['c2w_3dgs'].shape[0]):
        
-        #     viewpoint_cam  = Camera(c2w = batch['c2w_3dgs'][id],FoVy = batch['fovy'][id],height = batch['height'],width = batch['width'])
+            viewpoint_cam  = Camera(c2w = batch['c2w_3dgs'][id],FoVy = batch['fovy'][id],height = batch['height'],width = batch['width'])
 
 
-        #     render_pkg = render(viewpoint_cam, self.gaussian, self.pipe, renderbackground)
-        #     image, depth, viewspace_point_tensor, _, radii = render_pkg["render"], render_pkg["depth_3dgs"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
-        #     depth = depth.permute(1, 2, 0)
-        #     plt.imshow(depth.cpu().detach().numpy())
-        #     plt.axis('off') 
-        #     plt.show()
-        # print()
+            render_pkg = render(viewpoint_cam, self.gaussian, self.pipe, renderbackground)
+            image, depth, viewspace_point_tensor, _, radii = render_pkg["render"], render_pkg["depth_3dgs"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
+            depth = depth.permute(1, 2, 0)
+            image = image.permute(1, 2, 0)
+            plt.imshow(image.cpu().detach().numpy())
+            plt.axis('off') 
+            plt.show()
+        print()
         for id in range(batch['c2w_3dgs'].shape[0]):
             # 使用的c2w_3dgs生成，具体请查看uncond_out.py代码里的RandomCameraIterableDatasetCustom
             #请注意RandomCameraIterableDatasetCustom 的collated的返回值：'c2w_3dgs'对应的value
             viewpoint_cam  = Camera(c2w = batch['c2w_3dgs'][id],FoVy = batch['fovy'][id],height = batch['height'],width = batch['width'])
-
-       
-            viewpoint_cam  = Camera(c2w = batch['c2w_3dgs'][id], FoVy = batch['fovy'][id], height = batch['height'], width = batch['width'])
 
             render_pkg = render(viewpoint_cam, self.gaussian, self.pipe, renderbackground)
             image, depth, viewspace_point_tensor, _, radii = render_pkg["render"], render_pkg["depth_3dgs"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
@@ -98,6 +98,22 @@ class GaussianRoom(BaseLift3DSystem):
             depth =  depth.permute(1, 2, 0)
             
             image =  image.permute(1, 2, 0)
+            img = image.cpu().detach().numpy()
+            img = (img * 255).astype(np.uint8)
+            dep = depth.cpu().detach().numpy()
+            # 如果图像是 RGB 格式，转换为 BGR 格式
+            img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+            path = "/remote-home/share/room_gen/room_render/livingroom"
+            os.makedirs(path, exist_ok = True)
+            stime = time.time()
+            stime = str(stime).replace(".","_")
+            cv2.imwrite(os.path.join(path,f"{stime}_render.jpg"), img)
+            cv2.imwrite(os.path.join(path,f"{stime}_depth.jpg"), np.array(dep))
+            # print("image has been saved")
+
+            # plt.imshow(image.cpu().detach().numpy())
+            # plt.axis('off') 
+            # plt.show()
             images.append(image)
             depths.append(depth)
 

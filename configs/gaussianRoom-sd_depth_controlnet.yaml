@@ -6,16 +6,29 @@ seed: 0
 data_type: "random-outward-camera-datamodule" # 对应threeStudio/data/uncond_out.py
 
 data:
-  batch_size: 1
-  eval_camera_distance: 4.0
-  camera_distance_range: [1.5, 4.0]
+  batch_size: 4
+  #eval_camera_distance: 4.0
+  camera_distance_range: [1, 2.5]
   light_sample_strategy: "dreamfusion3dgs"
   height: 512
   width: 512
-  eval_height: 1024
-  eval_width: 1024
-  # elevation_range: [-10 , 80]
-  
+  eval_height: 512
+  eval_width: 512
+  elevation_range: [0, 90]
+  azimuth_range: [0,360]
+  ####
+  #本部分决定相机的生成。elevation将相机位置固定在场景正上方。camera_distance决定了相机的高度
+  #修改相机的仰角，在uncond_out.py中RandomCameraIterableDatasetCustom 的collate 部分
+  fix_elevation_deg: 90 #角度制
+  fix_azimuth_deg: 0 #角度制
+  fix_camera_distance: 1.4
+  fix_fovy_deg: 40 #角度制 
+  ####
+
+  n_val_views: 300
+  eval_elevation_deg: 45
+  eval_camera_distance: 1.5
+  eval_fovy_deg: 60
 system_type: "gaussianroom-system"
 system:
   load_path: "./scene_pcd/LivingRoom-4719/scene_pcd.ply"
