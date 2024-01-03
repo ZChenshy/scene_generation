@@ -34,6 +34,7 @@ system:
     controlnet_name_or_path: "/remote-home/share/Models/lllyasviel/control_v11f1p_sd15_depth" 
     ddim_scheduler_name_or_path: "/remote-home/share/Models/runwayml/stable-diffusion-v1-5" 
     guidance_scale: 100.
+    condition_scale: 0.75
     weighting_strategy: sds
     min_step_percent: 0.02
     max_step_percent: 0.98
