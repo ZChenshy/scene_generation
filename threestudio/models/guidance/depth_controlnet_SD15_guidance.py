@@ -30,7 +30,6 @@ class ControlnetGuidance(BaseObject):
     class Config(BaseObject.Config):
         cache_dir: Optional[str] = None
         
-        # TODO: 切入Stable Diffusion XL，因为条件维度原因，目前没有切入
         pretrained_model_name_or_path: str = "runwayml/stable-diffusion-v1-5"
         controlnet_name_or_path: str = "lllyasviel/control_v11f1p_sd15_depth" 
         ddim_scheduler_name_or_path: str = "runwayml/stable-diffusion-v1-5"
@@ -41,7 +40,7 @@ class ControlnetGuidance(BaseObject):
         enable_channels_last_format: bool = False
         
         guidance_scale: float = 7.5 # classifier free guidance
-        condition_scale: float = 1.5 # Diffusers recommends 0.5
+        condition_scale: float = 0.75 # Diffusers recommends 0.5
         
         grad_clip: Optional[
             Any
@@ -80,7 +79,7 @@ class ControlnetGuidance(BaseObject):
         )
         
         self.pipe = StableDiffusionControlNetPipeline.from_pretrained(
-            self.cfg.pretrained_model_name_or_path, controlnet=controlnet,**pipe_kwargs
+            self.cfg.pretrained_model_name_or_path, controlnet=controlnet, **pipe_kwargs
         ).to(self.device)
         
         self.scheduler = DDIMScheduler.from_pretrained(
@@ -89,7 +88,6 @@ class ControlnetGuidance(BaseObject):
             torch_dtype=self.weights_dtype,
             cache_dir=self.cfg.cache_dir,
         )
-        self.scheduler.set_timesteps(self.cfg.diffusion_steps)
         
         if self.cfg.enable_memory_efficient_attention:
             if parse_version(torch.__version__) >= parse_version("2"):
@@ -112,8 +110,8 @@ class ControlnetGuidance(BaseObject):
         if self.cfg.enable_channels_last_format:
             self.pipe.unet.to(memory_format=torch.channels_last)
         
-        # del self.pipe.text_encoder
-        # cleanup()
+        del self.pipe.text_encoder
+        cleanup()
         
         # Create model
         self.vae = self.pipe.vae.eval()
@@ -125,8 +123,6 @@ class ControlnetGuidance(BaseObject):
             p.requires_grad_(False)
         for p in self.unet.parameters():
             p.requires_grad_(False)
-        
-        self.scheduler = self.pipe.scheduler
         
         self.num_train_timesteps = self.scheduler.config.num_train_timesteps
         self.set_min_max_steps()  # set to default value
@@ -164,6 +160,13 @@ class ControlnetGuidance(BaseObject):
         condition_scale: float,
         encoder_hidden_states: Float[Tensor, "..."],
     ) -> Float[Tensor, "..."]:
+        '''
+            latents: BB 4 64 64
+            t: single value
+            image_cond: BB 3 512 512 [0, 1]
+            condition_scale: single value
+            encoder_hidden_states: BB 77 768 cond, uncond
+        '''
         return self.controlnet(
             latents.to(self.weights_dtype),
             t.to(self.weights_dtype),
@@ -194,6 +197,12 @@ class ControlnetGuidance(BaseObject):
         down_block_additional_residuals,
         mid_block_additional_residual,
     ) -> Float[Tensor, "..."]:
+        '''
+            latents: BB 4 64 64
+            t: single value
+            encoder_hidden_states: BB 77 768 
+            cond uncond: 该顺序对应noise_pred_text, noise_pred_uncond的顺序,可以改变顺序
+        '''
         input_dtype = latents.dtype
         return self.unet(
             latents.to(self.weights_dtype),
@@ -230,14 +239,17 @@ class ControlnetGuidance(BaseObject):
         t: Int[Tensor, "B"], 
     ):
         with torch.no_grad():
+            image_cond = torch.cat([image_cond] * 2) # BB 3 H W
+            
             # add noise
             noise = torch.randn_like(latents)  # TODO: use torch generator
             latents_noisy = self.scheduler.add_noise(latents, noise, t)
+            
             # pred noise
             latent_model_input = torch.cat([latents_noisy] * 2)
             down_block_res_samples, mid_block_res_sample = self.forward_controlnet(
                 latent_model_input,
-                t,
+                torch.cat([t] * 2),
                 encoder_hidden_states=text_embeddings,
                 image_cond=image_cond,
                 condition_scale=self.cfg.condition_scale,
@@ -245,7 +257,7 @@ class ControlnetGuidance(BaseObject):
 
             noise_pred = self.forward_control_unet(
                 latent_model_input,
-                t,
+                torch.cat([t] * 2),
                 encoder_hidden_states=text_embeddings,
                 cross_attention_kwargs=None,
                 down_block_additional_residuals=down_block_res_samples,
@@ -268,19 +280,19 @@ class ControlnetGuidance(BaseObject):
         rgb: Float[Tensor, "B H W C"],
         image_cond: Float[Tensor, "B H W C"], # TODO: 对Gaussian渲染的深度图进行预处理
         prompt_utils: PromptProcessorOutput,
+        rgb_as_latents=False,
         # elevation: Float[Tensor, "B"],
         # azimuth: Float[Tensor, "B"],
         # camera_distances: Float[Tensor, "B"],
         **kwargs,
     ):
         batch_size = rgb.shape[0]
-        assert batch_size == 1
-        assert rgb.shape[:-1] == image_cond.shape[:-1]
+        assert rgb.shape[:1] == image_cond.shape[:1] # 让渲染图与条件图大小相同
         assert len(rgb.shape) == len(image_cond.shape) == 4
         
         # TODO: 使用ViewDependtent Prompt Processor之后，需要修改
         temp = torch.zeros(1).to(rgb.device)
-        text_embeddings = prompt_utils.get_text_embeddings(temp, temp, temp, False)
+        text_embeddings = prompt_utils.get_text_embeddings(temp, temp, temp, False) # BB 77 768, cond, uncond
         
         depth_img_BCHW = self.normalized_image(image_cond) 
         
@@ -296,15 +308,18 @@ class ControlnetGuidance(BaseObject):
         )
         
         rgb_BCHW = rgb.permute(0, 3, 1, 2) # B H W C -> B C H W
-        rgb_BCHW = torch.clamp(rgb_BCHW, 0, 1) # Gaussian渲染图片像素值会有偏差，进行Clamp
+        if rgb_as_latents:
+            latents = F.interpolate(
+                rgb_BCHW, (64, 64), mode="bilinear", align_corners=False
+            )
+        else:
+            rgb_BCHW = torch.clamp(rgb_BCHW, 0, 1) # Gaussian渲染图片像素值会有偏差，进行Clamp
+            rgb_BCHW_512 = F.interpolate(
+                rgb_BCHW, (512, 512), mode="bilinear", align_corners=False
+            ) # 为了匹配Encoder的尺寸 
+            latents: Float[Tensor, "B 4 64 64"]
+            latents = self.encode_images(rgb_BCHW_512)
         
-        rgb_BCHW_512 = F.interpolate(
-            rgb_BCHW, (512, 512), mode="bilinear", align_corners=False
-        ) # 为了匹配Encoder的尺寸 
-        
-        latents: Float[Tensor, "B 4 64 64"]
-        latents = self.encode_images(rgb_BCHW_512)
-
         # timestep ~ U(0.02, 0.98) to avoid very high/low noise level
         t = torch.randint(
             self.min_step,
