@@ -79,10 +79,7 @@ class GaussianRoom(BaseLift3DSystem):
         # print()
         for id in range(batch['c2w_3dgs'].shape[0]):
             # 使用的c2w_3dgs生成，具体请查看uncond_out.py代码里的RandomCameraIterableDatasetCustom
-            #请注意RandomCameraIterableDatasetCustom 的collated的返回值：'c2w_3dgs'对应的value
-            viewpoint_cam  = Camera(c2w = batch['c2w_3dgs'][id],FoVy = batch['fovy'][id],height = batch['height'],width = batch['width'])
-
-       
+            #请注意RandomCameraIterableDatasetCustom 的collated的返回值：'c2w_3dgs'对应的value      
             viewpoint_cam  = Camera(c2w = batch['c2w_3dgs'][id], FoVy = batch['fovy'][id], height = batch['height'], width = batch['width'])
 
             render_pkg = render(viewpoint_cam, self.gaussian, self.pipe, renderbackground)
