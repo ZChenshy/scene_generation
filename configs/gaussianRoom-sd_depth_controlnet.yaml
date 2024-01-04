@@ -37,7 +37,7 @@ system:
   prompt_processor_type: "stable-diffusion-prompt-processor"
   prompt_processor:
     pretrained_model_name_or_path: "/remote-home/share/Models/runwayml/stable-diffusion-v1-5"
-    prompt: ???
+    prompt: "a modern livingroom"
     negative_prompt: "ugly, bad anatomy, blurry, pixelated obscure, unnatural colors, poor lighting, dull, and unclear, cropped, lowres, low quality, artifacts, duplicate, morbid, mutilated, poorly drawn face, deformed, dehydrated, bad proportions, unfocused"
 
 
