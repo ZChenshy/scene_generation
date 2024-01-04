@@ -266,12 +266,15 @@ class ControlnetGuidance(BaseObject):
 
         # perform classifier-free guidance
         noise_pred_text, noise_pred_uncond = noise_pred.chunk(2)
-        noise_pred = noise_pred_uncond + self.cfg.guidance_scale * (
+        # noise_pred = noise_pred_uncond + self.cfg.guidance_scale * (
+        #     noise_pred_text - noise_pred_uncond
+        # )
+        noise_pred = self.cfg.guidance_scale * (
             noise_pred_text - noise_pred_uncond
         )
 
         w = (1 - self.alphas[t]).view(-1, 1, 1, 1)
-        grad = w * (noise_pred - noise)
+        grad = w * (noise_pred)
         return grad
 
     

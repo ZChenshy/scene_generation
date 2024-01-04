@@ -9,7 +9,7 @@ import numpy as np
 from trimesh.transformations import rotation_matrix, transform_points
 #from trajectory import get_extrinsics,_rot_xyz
 import open3d as o3d
-import utils
+from coarse_room import utils
 from random import randint
 import math
 from coarse_room.utils import vis_pc

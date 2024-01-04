@@ -67,21 +67,11 @@ class GaussianRoom(BaseLift3DSystem):
         images = []
         depths = []
         self.viewspace_point_list = []
-        for id in range(batch['c2w_3dgs'].shape[0]):
-       
-            viewpoint_cam  = Camera(c2w = batch['c2w_3dgs'][id],FoVy = batch['fovy'][id],height = batch['height'],width = batch['width'])
-            render_pkg = render(viewpoint_cam, self.gaussian, self.pipe, renderbackground)
-            image, depth, viewspace_point_tensor, _, radii = render_pkg["render"], render_pkg["depth_3dgs"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
-            depth = depth.permute(1, 2, 0)
-            image = image.permute(1, 2, 0)
-            plt.imshow(image.cpu().detach().numpy())
-            plt.axis('off') 
-            plt.show()
-        print()
+    
         for id in range(batch['c2w_3dgs'].shape[0]):
             # 使用的c2w_3dgs生成，具体请查看uncond_out.py代码里的RandomCameraIterableDatasetCustom
             #请注意RandomCameraIterableDatasetCustom 的collated的返回值：'c2w_3dgs'对应的value
-            viewpoint_cam  = Camera(c2w = batch['c2w_3dgs'][id],FoVy = batch['fovy'][id],height = batch['height'],width = batch['width'])
+            viewpoint_cam  = Camera(c2w = batch['c2w_3dgs'][id], FoVy = batch['fovy'][id], height = batch['height'], width = batch['width'])
 
             render_pkg = render(viewpoint_cam, self.gaussian, self.pipe, renderbackground)
             image, depth, viewspace_point_tensor, _, radii = render_pkg["render"], render_pkg["depth_3dgs"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
@@ -91,27 +81,9 @@ class GaussianRoom(BaseLift3DSystem):
                 self.radii = radii
             else:
                 self.radii = torch.max(radii,self.radii)
-                
-            depth = render_pkg["depth_3dgs"]
+                      
             depth =  depth.permute(1, 2, 0)
-            
             image =  image.permute(1, 2, 0)
-            img = image.cpu().detach().numpy()
-            img = (img * 255).astype(np.uint8)
-            dep = depth.cpu().detach().numpy()
-            # 如果图像是 RGB 格式，转换为 BGR 格式
-            img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-            path = "/remote-home/share/room_gen/room_render/livingroom"
-            os.makedirs(path, exist_ok = True)
-            stime = time.time()
-            stime = str(stime).replace(".","_")
-            cv2.imwrite(os.path.join(path,f"{stime}_render.jpg"), img)
-            cv2.imwrite(os.path.join(path,f"{stime}_depth.jpg"), np.array(dep))
-            # print("image has been saved")
-
-            # plt.imshow(image.cpu().detach().numpy())
-            # plt.axis('off') 
-            # plt.show()
             images.append(image)
             depths.append(depth)
 
@@ -136,7 +108,6 @@ class GaussianRoom(BaseLift3DSystem):
         self.gaussian.update_learning_rate(self.true_global_step)
 
         render_out = self.forward(batch) # batch 为相机参数
-        # TODO : 在这里加入保存代码，将每次Gaussian渲染的结果保存，从而测试相机参数是否正确
 
         prompt_utils = self.prompt_processor() # TODO: 确定PromptProcessor的View-Dependent是否还需要
         images = render_out["comp_rgb"] # BHWC c=3
@@ -346,11 +317,6 @@ class GaussianRoom(BaseLift3DSystem):
         save_path = self.get_save_path(f"last_3dgs.ply")
         self.gaussian.save_ply(save_path)
         
-        # self.pointefig.savefig(self.get_save_path("pointe.png"))
-        
-        
-        # o3d.io.write_point_cloud(self.get_save_path("shape.ply"), self.point_cloud)
-        # self.save_gif_to_file(self.shapeimages, self.get_save_path("shape.gif"))
         save_ply(save_path, self.get_save_path(f"it{self.true_global_step}-test-color.ply"))
     
         

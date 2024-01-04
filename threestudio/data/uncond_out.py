@@ -895,7 +895,7 @@ class RandomCameraIterableDatasetCustom(IterableDataset, Updateable):
             "mvp_mtx": mvp_mtx,
             "camera_positions": camera_positions,
             "c2w": c2w,
-            "c2w_3dgs":c2w,
+            "c2w_3dgs":c2w_3dgs,
             "light_positions": light_positions,
             "elevation": elevation_deg,
             "azimuth": azimuth_deg,

@@ -4,7 +4,7 @@ import os
 import random
 import numpy as np
 import open3d as o3d
-import plydata
+from plyfile import PlyData
 from gaussiansplatting.scene.gaussian_model import BasicPointCloud
 from coarse_room.generate_scenePcd import scene_loader
 
@@ -252,7 +252,7 @@ def save_ply(path, save_path):
     def SH2RGB(sh):
         return sh * C0 + 0.5
     
-    data = plydata.read(path)
+    data = PlyData.read(path)
 
     xyz = np.stack((np.asarray(data.elements[0]["x"]),
                     np.asarray(data.elements[0]["y"]),
