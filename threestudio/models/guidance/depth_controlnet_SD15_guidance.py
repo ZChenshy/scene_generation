@@ -54,7 +54,7 @@ class ControlnetGuidance(BaseObject):
         
         diffusion_steps: int = 20 # 与ThreeStudio中ControlNet Guidance相同默认为20
         
-        weighting_strategy: str = "sds"
+        weighting_strategy: str = "csd"
 
     cfg : Config
     
@@ -123,6 +123,8 @@ class ControlnetGuidance(BaseObject):
             p.requires_grad_(False)
         for p in self.unet.parameters():
             p.requires_grad_(False)
+        for p in self.controlnet.parameters():
+            p.requires_grad_(False)
         
         self.num_train_timesteps = self.scheduler.config.num_train_timesteps
         self.set_min_max_steps()  # set to default value
@@ -133,7 +135,7 @@ class ControlnetGuidance(BaseObject):
         
         self.grad_clip_val: Optional[float] = None
         
-        threestudio.info(f"Loaded ControlNet!")
+        threestudio.info(f"Loaded Stable Diffusion v1.5 Depth ControlNet!")
 
 
     @torch.cuda.amp.autocast(enabled=False)
@@ -266,15 +268,24 @@ class ControlnetGuidance(BaseObject):
 
         # perform classifier-free guidance
         noise_pred_text, noise_pred_uncond = noise_pred.chunk(2)
-        # noise_pred = noise_pred_uncond + self.cfg.guidance_scale * (
+        # noise_pred = noise_pred_text + self.cfg.guidance_scale * (
         #     noise_pred_text - noise_pred_uncond
         # )
-        noise_pred = self.cfg.guidance_scale * (
-            noise_pred_text - noise_pred_uncond
-        )
-
-        w = (1 - self.alphas[t]).view(-1, 1, 1, 1)
-        grad = w * (noise_pred)
+        if self.cfg.weighting_strategy == 'csd':
+            noise_pred = self.cfg.guidance_scale * (
+                noise_pred_text - noise_pred_uncond
+            )
+            w = (1 - self.alphas[t]).view(-1, 1, 1, 1)
+            grad = w * (noise_pred)
+        elif: self.cfg.weighting_strategy == 'sds':
+            noise_pred = noise_pred_text + self.cfg.guidance_scale * (
+                noise_pred_text - noise_pred_uncond
+            )
+            w = (1 - self.alphas[t]).view(-1, 1, 1, 1)
+            grad = w * (noise_pred - noise)
+        else:
+            raise NotImplementedError
+        
         return grad
 
     
