@@ -19,6 +19,7 @@ system:
   geometry:
     radius: 2.
     normal_type: analytic
+
     pos_encoding_config:
       otype: HashGrid
       n_levels: 16
@@ -26,10 +27,12 @@ system:
       log2_hashmap_size: 19
       base_resolution: 16
       per_level_scale: 1.4472692374403782 # max resolution 4096
+
     density_bias: "blob_magic3d"
     density_activation: softplus
     density_blob_scale: 10.
     density_blob_std: 0.5
+    
     isosurface_resolution: 128
     isosurface_threshold: auto
     isosurface_coarse_to_fine: true
@@ -48,12 +51,12 @@ system:
 
   prompt_processor_type: "stable-diffusion-prompt-processor"
   prompt_processor:
-    pretrained_model_name_or_path: "stabilityai/stable-diffusion-2-1-base"
+    pretrained_model_name_or_path: "/remote-home/share/Models/stabilityai/stable-diffusion-2-1-base"
     prompt: ???
 
   guidance_type: "stable-diffusion-guidance"
   guidance:
-    pretrained_model_name_or_path: "stabilityai/stable-diffusion-2-1-base"
+    pretrained_model_name_or_path: "/remote-home/share/Models/stabilityai/stable-diffusion-2-1-base"
     weighting_strategy: uniform
     guidance_scale: 100.
     min_step_percent: 0.02

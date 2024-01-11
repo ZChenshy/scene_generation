@@ -42,16 +42,16 @@ system:
 
   renderer_type: "nvdiff-rasterizer"
   renderer:
-    context_type: gl
+    context_type: cuda
 
   prompt_processor_type: "stable-diffusion-prompt-processor"
   prompt_processor:
-    pretrained_model_name_or_path: "stabilityai/stable-diffusion-2-1-base"
+    pretrained_model_name_or_path: "/remote-home/share/Models/stabilityai/stable-diffusion-2-1-base"
     prompt: ???
 
   guidance_type: "stable-diffusion-guidance"
   guidance:
-    pretrained_model_name_or_path: "stabilityai/stable-diffusion-2-1-base"
+    pretrained_model_name_or_path: "/remote-home/share/Models/stabilityai/stable-diffusion-2-1-base"
     weighting_strategy: sds
     guidance_scale: 100.
     min_step_percent: 0.02

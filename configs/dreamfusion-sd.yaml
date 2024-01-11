@@ -64,12 +64,12 @@ system:
 
   prompt_processor_type: "stable-diffusion-prompt-processor"
   prompt_processor:
-    pretrained_model_name_or_path: "stabilityai/stable-diffusion-2-1-base"
+    pretrained_model_name_or_path: "/remote-home/share/Models/stabilityai/stable-diffusion-2-1-base"
     prompt: ???
-
+    
   guidance_type: "stable-diffusion-guidance"
   guidance:
-    pretrained_model_name_or_path: "stabilityai/stable-diffusion-2-1-base"
+    pretrained_model_name_or_path: "/remote-home/share/Models/stabilityai/stable-diffusion-2-1-base"
     guidance_scale: 100.
     weighting_strategy: sds
     min_step_percent: 0.02
@@ -99,7 +99,7 @@ system:
         lr: 0.001
 
 trainer:
-  max_steps: 10000
+  max_steps: 15000
   log_every_n_steps: 1
   num_sanity_val_steps: 0
   val_check_interval: 200
