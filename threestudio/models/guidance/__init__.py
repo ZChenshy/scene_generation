@@ -8,4 +8,6 @@ from . import (
     stable_zero123_guidance,
     zero123_guidance,
     zero123_unified_guidance,
+    depth_controlnet_SD15_guidance,
+    depth_controlnet_SDXL_guidance,
 )
