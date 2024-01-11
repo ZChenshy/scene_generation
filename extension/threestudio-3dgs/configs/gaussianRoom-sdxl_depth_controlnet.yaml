@@ -1,0 +1,84 @@
+name: "gaussiandroom-sdxl"
+tag: "${rmspace:${system.prompt_processor.prompt},_}"
+exp_root_dir: "outputs"
+seed: 0
+ 
+data_type: "random-outward-camera-datamodule" # 对应threeStudio/data/uncond_out.py
+
+data:
+  batch_size: 1
+  #eval_camera_distance: 4.0
+  camera_distance_range: [1, 2.5]
+  light_sample_strategy: "dreamfusion3dgs"
+  height: 1024
+  width: 1024
+  eval_height: 512
+  eval_width: 512
+  elevation_range: [0, 90]
+  azimuth_range: [0,360]
+  ####
+  #本部分决定相机的生成。elevation将相机位置固定在场景正上方。camera_distance决定了相机的高度
+  #修改相机的仰角，在uncond_out.py中RandomCameraIterableDatasetCustom 的collate 部分
+  fix_elevation_deg: 90 #角度制
+  fix_azimuth_deg: 0 #角度制
+  fix_camera_distance: 1.4
+  fix_fovy_deg: 40 #角度制 
+  ####
+
+  n_val_views: 4
+  eval_elevation_deg: 45
+  eval_camera_distance: 1.5
+  eval_fovy_deg: 60
+system_type: "gaussianroom-system"
+system:
+  load_path: "/remote-home/share/room_gen/roomPCD/4944051f-3a7e-4387-b5f3-f925ae6da57e/LivingRoom-4719/scene_pcd.ply"
+  radius: ${data.eval_camera_distance}
+  sh_degree: 0
+  prompt_processor_type: "stable-diffusion-xl-prompt-processor"
+  prompt_processor:
+    pretrained_model_name_or_path: "/remote-home/share/room_gen/Models/stabilityai/stable-diffusion-xl-base-0.9"
+    prompt: ???
+    negative_prompt: "ugly, blurry, pixelated obscure, unnatural colors, poor lighting, dull, and unclear, cropped, lowres, low quality, artifacts, duplicate, morbid, mutilated, deformed, dehydrated, bad proportions, unfocused, unreal"
+
+
+  guidance_type: "stable-diffusion-xl-depth-controlnet-guidance"
+  guidance:
+    pretrained_model_name_or_path: "/remote-home/share/room_gen/Models/stabilityai/stable-diffusion-xl-base-1.0" 
+    controlnet_name_or_path: "/remote-home/share/room_gen/Models/diffusers/controlnet-depth-sdxl-1.0" 
+    vae_pretrained_path: "/remote-home/share/room_gen/Models/madebyollin/sdxl-vae-fp16-fix"
+    guidance_scale: 7.5
+    condition_scale: 1
+    weighting_strategy: csd
+    min_step_percent: 0.02
+    max_step_percent: 0.98
+    grad_clip: [0, 1.5, 2.0, 1000]
+
+  loggers:
+    wandb:
+      enable: false
+      project: 'threestudio'
+      name: None
+
+  loss:
+    lambda_sds: 1.
+    lambda_sparsity: 1.
+    lambda_opaque: 0.0
+  optimizer:
+    name: Adam
+    args:
+      lr: 0.001
+      betas: [0.9, 0.99]
+      eps: 1.e-15
+
+trainer:
+  max_steps: 10000
+  log_every_n_steps: 1
+  num_sanity_val_steps: 0
+  val_check_interval: 500
+  enable_progress_bar: true
+  precision: 16-mixed
+
+checkpoint:
+  save_last: true # save at each validation time
+  save_top_k: -1
+  every_n_train_steps: ${trainer.max_steps}
