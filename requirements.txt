@@ -24,18 +24,3 @@ gradio==4.11.0
 git+https://github.com/ashawkey/envlight.git
 torchmetrics
 
-# deepfloyd
-xformers
-bitsandbytes==0.38.1
-sentencepiece
-safetensors
-huggingface_hub
-
-# for zero123
-einops
-kornia
-taming-transformers-rom1504
-git+https://github.com/openai/CLIP.git
-
-#controlnet
-#controlnet_aux
