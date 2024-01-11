@@ -42,6 +42,7 @@ class GaussianBatchRenderer:
                 viewspace_points.append(render_pkg["viewspace_points"])
                 visibility_filters.append(render_pkg["visibility_filter"])
                 radiis.append(render_pkg["radii"])
+                
                 if render_pkg.__contains__("normal"):
                     normals.append(render_pkg["normal"])
                 if (
