@@ -306,7 +306,7 @@ class PromptProcessor(BaseObject):
         self.negative_prompt = self.cfg.negative_prompt
 
         threestudio.info(
-            f"Using prompt [{self.prompt}] and negative prompt [{self.negative_prompt}]"
+            f"prompt: [{self.prompt}]\n negative prompt: [{self.negative_prompt}]"
         )
 
         # view-dependent prompting
