@@ -119,7 +119,8 @@ class DiffGaussian(Rasterizer, GaussianBatchRenderer):
             colors_precomp = override_color
 
         # Rasterize visible Gaussians to image, obtain their radii (on screen).
-        rendered_image, radii, rendered_depth, rendered_alpha = rasterizer(
+        # rendered_image, radii, rendered_depth, rendered_alpha = rasterizer(
+        rendered_image, radii, rendered_depth = rasterizer(
             means3D=means3D,
             means2D=means2D,
             shs=shs,
@@ -139,7 +140,7 @@ class DiffGaussian(Rasterizer, GaussianBatchRenderer):
         return {
             "render": rendered_image.clamp(0, 1),
             "depth": rendered_depth,
-            "mask": rendered_alpha,
+            # "mask": rendered_alpha,
             "viewspace_points": screenspace_points,
             "visibility_filter": radii > 0,
             "radii": radii,
