@@ -134,13 +134,14 @@ class ControlnetGuidance(BaseObject):
         
         self.grad_clip_val: Optional[float] = None
         
-        threestudio.info(f"Loaded ControlNet!")
+        threestudio.info(f"Loaded Stable Diffusion v1.5 Depth ControlNet !")
 
 
     @torch.cuda.amp.autocast(enabled=False)
     def set_min_max_steps(self, min_step_percent=0.02, max_step_percent=0.98):
         self.min_step = int(self.num_train_timesteps * min_step_percent)
         self.max_step = int(self.num_train_timesteps * max_step_percent)
+        
         
     # TODO: 使得输入的深度图像的像素值范围为[0, 1]，同时使近距离的区域像素值更大，远距离的区域像素值更小（与Gaussian渲染的深度进行结合）
     def normalized_image(self, image: Float[Tensor, "B H W C"]) -> Float[Tensor, "B C H W"]:
@@ -377,23 +378,3 @@ class ControlnetGuidance(BaseObject):
             max_step_percent=C(self.cfg.max_step_percent, epoch, global_step),
         )
         
-
-if __name__ == "__main__":
-    from threestudio.utils.config import ExperimentConfig, load_config
-    from threestudio.utils.typing import Optional
-
-    cfg = load_config("/remote-home/hzp/scene_generation/configs/debug/controlnet.yaml")
-    guidance = threestudio.find(cfg.system.guidance_type)(cfg.system.guidance)
-    prompt_processor = threestudio.find(cfg.system.prompt_processor_type)(
-        cfg.system.prompt_processor
-    )
-
-    rgb_image = cv2.imread("/remote-home/hzp/test/1703820320_7791991_render.jpg")[:, :, ::-1].copy() / 255
-    rgb_image = torch.FloatTensor(rgb_image).unsqueeze(0).to(guidance.device)
-    depth_image = cv2.imread("/remote-home/hzp/test/1703820320_7791991_depth.jpg", cv2.IMREAD_UNCHANGED).copy() / 255
-    depth_image = torch.FloatTensor(depth_image)
-    depth_image = depth_image.unsqueeze(0).to(guidance.device) # HW -> BHW
-    depth_image = depth_image.unsqueeze(3) # BHW -> BHWC
-    prompt_utils = prompt_processor()
-    guidance_out = guidance(rgb_image, depth_image, prompt_utils)
-    print(guidance_out)
