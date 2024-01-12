@@ -407,7 +407,7 @@ class GaussianBaseModel(BaseGeometry, GaussianIO):
         features[:, 3:, 1:] = 0.0
 
         threestudio.info(
-            f"Number of points at initialisation:{fused_point_cloud.shape[0]}"
+            f"Number of points at initialization:{fused_point_cloud.shape[0]}"
         )
 
         dist2 = torch.clamp_min(
