@@ -179,6 +179,8 @@ pyrightconfig.json
 .threestudio_cache/
 outputs/
 outputs-gradio/
+test_result/
+
 
 # pretrained model weights
 *.ckpt
