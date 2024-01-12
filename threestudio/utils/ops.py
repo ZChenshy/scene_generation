@@ -355,7 +355,7 @@ def get_cam_info_gaussian(c2w, fovx, fovy, znear, zfar):
         world_view_transform.unsqueeze(0).bmm(projection_matrix.unsqueeze(0))
     ).squeeze(0)
     camera_center = world_view_transform.inverse()[3, :3]
-
+    # TODO: uncond_out相机如何设置
     return world_view_transform, full_proj_transform, camera_center
 
 

@@ -19,6 +19,7 @@ class GaussianBatchRenderer:
         for batch_idx in range(bs):
             batch["batch_idx"] = batch_idx
             fovy = batch["fovy"][batch_idx]
+            # TODO: uncond_out相机如何设置
             w2c, proj, cam_p = get_cam_info_gaussian(
                 c2w=batch["c2w"][batch_idx], fovx=fovy, fovy=fovy, znear=0.1, zfar=100
             )
