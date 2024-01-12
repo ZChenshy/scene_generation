@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import torch
-
+import PIL
 import threestudio
 from threestudio.systems.base import BaseLift3DSystem
 from threestudio.systems.utils import parse_optimizer
@@ -16,7 +16,6 @@ from ..geometry.gaussian_base import BasicPointCloud, Camera
 class GaussianRoom(BaseLift3DSystem):
     @dataclass
     class Config(BaseLift3DSystem.Config):
-        # TODO : 从参数中读取 load_path
         visualize_samples: bool = False
         
     cfg: Config
@@ -70,15 +69,34 @@ class GaussianRoom(BaseLift3DSystem):
     def training_step(self, batch, batch_idx):
 
         opt = self.optimizers()
-        out = self(batch)
+        out = self.forward(batch) # HWC
 
         visibility_filter = out["visibility_filter"]
         radii = out["radii"]
         guidance_inp = out["comp_rgb"]
-        # import pdb; pdb.set_trace()
+        guidance_cond = out["comp_depth"]
         viewspace_point_tensor = out["viewspace_points"]
+        
+        # * >>> For Debug >>>
+        rgb_max = torch.max(guidance_inp[0])
+        rgb_min = torch.min(guidance_inp[0])
+        depth_max = torch.max(guidance_cond[0])
+        depth_min = torch.min(guidance_cond[0])
+        
+        rgb = PIL.Image.fromarray((guidance_inp[0].cpu().detach().numpy() * 255).astype(np.uint8), "RGB")
+        rgb.save(f"./test_result/guidance_inp_{self.true_global_step}.png")
+        
+        depth = (guidance_cond[0] - depth_min) / (depth_max - depth_min) 
+        depth_array = depth.cpu().detach().numpy().squeeze()
+        depth_array = (depth_array * 255).astype(np.uint8)
+        depth = PIL.Image.fromarray(depth_array, "L")
+        depth.save(f"./test_result/guidance_cond_{self.true_global_step}.png")
+        # * <<< Debug <<<
+        
         guidance_out = self.guidance(
-            guidance_inp, self.prompt_utils, **batch, rgb_as_latents=False
+            rgb=guidance_inp, image_cond=guidance_cond, 
+            prompt_utils=self.prompt_utils, 
+            **batch, rgb_as_latents=False
         )
 
         loss_sds = 0.0
@@ -127,14 +145,13 @@ class GaussianRoom(BaseLift3DSystem):
             self.log(f"train/loss_tv", loss_tv)
             loss += loss_tv
             
-        # ! 怎样得到的comp_normal呢
         if (
             out.__contains__("comp_depth")
             and self.cfg.loss["lambda_depth_tv_loss"] > 0.0
         ):
             loss_depth_tv = self.C(self.cfg.loss["lambda_depth_tv_loss"]) * (
-                tv_loss(out["comp_normal"].permute(0, 3, 1, 2))
-                + tv_loss(out["comp_depth"].permute(0, 3, 1, 2))
+                # tv_loss(out["comp_normal"].permute(0, 3, 1, 2)) # ! 这里的comp_normal是怎么得到的
+                tv_loss(out["comp_depth"].permute(0, 3, 1, 2))
             )
             self.log(f"train/loss_depth_tv", loss_depth_tv)
             loss += loss_depth_tv
