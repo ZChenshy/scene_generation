@@ -22,4 +22,4 @@ from .renderer import (
     diff_gaussian_rasterizer_background,
     diff_gaussian_rasterizer_shading,
 )
-from .system import gaussian_mvdream, gaussian_splatting, gaussian_zero123
+from .system import gaussian_mvdream, gaussian_splatting, gaussian_zero123, gaussianRoom
