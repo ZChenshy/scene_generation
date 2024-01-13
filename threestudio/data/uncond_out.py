@@ -127,8 +127,6 @@ class RandomCameraDataset(Dataset):
         self.radius = self.radius
         self.look_direction = self.look_direction
 
-        
-
         azimuth_deg: Float[Tensor, "B"]
         if self.split == "val":
             # make sure the first and last view are not the same
