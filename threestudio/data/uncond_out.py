@@ -55,6 +55,7 @@ def pose_spherical(theta, phi, radius):
 
 @dataclass
 class RandomCameraDataModuleConfig:
+    
     # height, width, and batch_size should be Union[int, List[int]]
     # but OmegaConf does not support Union of containers
     height: Any = 512
@@ -70,7 +71,6 @@ class RandomCameraDataModuleConfig:
     elevation_range: Tuple[float, float] = (-10, 60)
     azimuth_range: Tuple[float, float] = (-180, 180)
     camera_distance_range: Tuple[float, float] = (4.,6.)
-    
     fix_elevation_deg: float = 90
     fix_azimuth_deg: float = 0
     fix_fovy_deg: float = 60
@@ -187,6 +187,8 @@ class RandomCameraDataset(Dataset):
             ###################
         
         # default camera up direction as +y
+        up: Float[Tensor, "B 3"] = torch.as_tensor([0 , 1 , 0], dtype=torch.float32)[
+            None, :].repeat(self.batch_size, 1)
         lookat: Float[Tensor, "B 3"] = F.normalize(target_points - camera_positions, dim=-1)
         right: Float[Tensor, "B 3"] = F.normalize(torch.cross(lookat, up,dim=-1), dim=-1)
 
