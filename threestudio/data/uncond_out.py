@@ -55,6 +55,7 @@ def pose_spherical(theta, phi, radius):
 
 @dataclass
 class RandomCameraDataModuleConfig:
+    
     # height, width, and batch_size should be Union[int, List[int]]
     # but OmegaConf does not support Union of containers
     height: Any = 512
@@ -70,7 +71,6 @@ class RandomCameraDataModuleConfig:
     elevation_range: Tuple[float, float] = (-10, 60)
     azimuth_range: Tuple[float, float] = (-180, 180)
     camera_distance_range: Tuple[float, float] = (4.,6.)
-    
     fix_elevation_deg: float = 90
     fix_azimuth_deg: float = 0
     fix_fovy_deg: float = 60
