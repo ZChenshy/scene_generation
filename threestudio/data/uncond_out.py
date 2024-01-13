@@ -124,8 +124,8 @@ class RandomCameraDataset(Dataset):
 
         self.round_camera = self.cfg.round_camera
         self.round_center = self.cfg.round_center
-        self.radius = self.radius
-        self.look_direction = self.look_direction
+        self.radius = self.cfg.radius
+        self.look_direction = self.cfg.look_direction
 
         azimuth_deg: Float[Tensor, "B"]
         if self.split == "val":
@@ -187,10 +187,9 @@ class RandomCameraDataset(Dataset):
             ###################
         
         # default camera up direction as +y
-        up: Float[Tensor, "B 3"] = torch.as_tensor([0 , 1 , 0], dtype=torch.float32)[
-            None, :].repeat(self.batch_size, 1)
+        up: Float[Tensor, "B 3"] = torch.as_tensor([0 , 1 , 0], dtype=torch.float32)[None, :].repeat(self.cfg.batch_size, 1)
         lookat: Float[Tensor, "B 3"] = F.normalize(target_points - camera_positions, dim=-1)
-        right: Float[Tensor, "B 3"] = F.normalize(torch.cross(lookat, up,dim=-1), dim=-1)
+        right: Float[Tensor, "B 3"] = F.normalize(torch.cross(lookat, up, dim=-1), dim=-1)
 
         #修正up向量
         up = F.normalize(torch.cross(right, lookat,dim=-1), dim=-1)
@@ -241,27 +240,9 @@ class RandomCameraDataset(Dataset):
         )  # FIXME: hard-coded near and far
         mvp_mtx: Float[Tensor, "B 4 4"] = get_mvp_matrix(c2w, proj_mtx)
 
-        c2w_3dgs = []
-        for id in range(self.n_views):
-            # TODO : render_pose fix
-            # origin code : render_pose = pose_spherical( azimuth_deg[id] + 180.0 - self.load_type*90, -elevation_deg[id], camera_distances[id])
-            render_pose = pose_spherical( azimuth_deg[id] + 180.0, -elevation_deg[id], camera_distances[id])
-            
-            matrix = torch.linalg.inv(render_pose)
-            # R = -np.transpose(matrix[:3,:3])
-            # R = -np.transpose(matrix[:3,:3])
-            R = -torch.transpose(matrix[:3,:3], 0, 1)
-            R[:,0] = -R[:,0]
-            T = -matrix[:3, 3]
-            c2w_single = torch.cat([R, T[:,None]], 1)
-            c2w_single = torch.cat([c2w_single, torch.tensor([[0,0,0,1]])], 0)
-            # c2w_single = convert_camera_to_world_transform(c2w_single)
-            c2w_3dgs.append(c2w_single)
-        c2w_3dgs = torch.stack(c2w_3dgs, 0)
         self.mvp_mtx = mvp_mtx
         self.c2w = c2w
         self.w2c = w2c
-        self.c2w_3dgs = c2w
         self.camera_positions = camera_positions
         self.light_positions = light_positions
         self.elevation, self.azimuth = elevation, azimuth
@@ -269,8 +250,10 @@ class RandomCameraDataset(Dataset):
         self.camera_distances = camera_distances
         self.fovy = fovy
 
+
     def __len__(self):
         return self.n_views
+
 
     def __getitem__(self, index):
         return {
@@ -278,7 +261,6 @@ class RandomCameraDataset(Dataset):
             "mvp_mtx": self.mvp_mtx[index],
             "w2c": self.w2c[index],
             "c2w": self.c2w[index],
-            "c2w_3dgs": self.c2w_3dgs[index],
             "camera_positions": self.camera_positions[index],
             "light_positions": self.light_positions[index],
             "elevation": self.elevation_deg[index],
