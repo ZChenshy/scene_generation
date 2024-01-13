@@ -77,7 +77,7 @@ class GaussianRoom(BaseLift3DSystem):
         guidance_cond = out["comp_depth"] # BHWC, c=1, not normalized
         viewspace_point_tensor = out["viewspace_points"]
         
-        # * >>> For Debug >>>
+        #! >>> For Debug >>>
         rgb_max = torch.max(guidance_inp[0])
         rgb_min = torch.min(guidance_inp[0])
         depth_max = torch.max(guidance_cond[0])
@@ -91,7 +91,7 @@ class GaussianRoom(BaseLift3DSystem):
         depth_array = (depth_array * 255).astype(np.uint8)
         depth = PIL.Image.fromarray(depth_array, "L")
         depth.save(f"./test_result/guidance_cond_{self.true_global_step}.png")
-        # * <<< Debug <<<
+        #! <<< Debug <<<
         
         guidance_out = self.guidance(
             rgb=guidance_inp, image_cond=guidance_cond, 
@@ -199,17 +199,6 @@ class GaussianRoom(BaseLift3DSystem):
                     }
                 ]
                 if "comp_normal" in out
-                else []
-            ) 
-            + (
-                [
-                    {
-                        "type": "grayscale",
-                        "img": out["comp_depth"][0],
-                        "kwargs": {"data_format": "HWC", "data_range": (0, 1)},
-                    }
-                ]
-                if "comp_depth" in out
                 else []
             ),
             name="validation_step",

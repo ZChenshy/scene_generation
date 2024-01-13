@@ -160,7 +160,7 @@ class RandomCameraDataset(Dataset):
             ###################
             if self.rota_camera:
                 camera_positions = torch.tensor([self.camera_position]).repeat(self.n_views)
-
+                # ! BUG: Number of dimensions of repeat dims can not be smaller than number of dimensions of tensor
                 elevation_deg = self.camera_eval 
                 rotation_angle = torch.linspace(0., self.rotation_angle, self.n_views)
                 radius = math.fabs(self.camera_position)[1] / math.tan(math.fabs(elevation_deg) * math.pi / 180.0)
