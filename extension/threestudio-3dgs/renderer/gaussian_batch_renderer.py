@@ -20,7 +20,7 @@ class GaussianBatchRenderer:
             batch["batch_idx"] = batch_idx
             fovy = batch["fovy"][batch_idx]
             # TODO: uncond_out相机如何设置
-            w2c, proj, cam_p = get_cam_info_gaussian(
+            w2c, proj, cam_point = get_cam_info_gaussian(
                 c2w=batch["c2w"][batch_idx], fovx=fovy, fovy=fovy, znear=0.1, zfar=100
             )
 
@@ -32,7 +32,7 @@ class GaussianBatchRenderer:
                 image_height=batch["height"],
                 world_view_transform=w2c,
                 full_proj_transform=proj,
-                camera_center=cam_p,
+                camera_center=cam_point,
             )
 
             with autocast(enabled=False):
