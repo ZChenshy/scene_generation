@@ -90,6 +90,20 @@ class RandomCameraDataModuleConfig:
     light_sample_strategy: str = "dreamfusion"
     batch_uniform_azimuth: bool = True
     progressive_until: int = 0  # progressive ranges for elevation, azimuth, r, fovy
+    ###
+    #该部分参数用于test部分，固定相机在某个位置，旋转相机观察场景
+    rota_camera: bool = True #该参数用于控制使用旋转相机
+    camera_position: Tuple[float, float, float] = (0, 0.25, 0) #相机固定位置
+    camera_eval: float = -10 #相机固定仰角，负值相机向下看，正值相机向上看
+    rotation_angle: float = 360 #相机旋转角度，360度为一圈
+
+    ###
+    #该部分参数用于test部分，相机轨迹为一个圆，相机在圆上运动，观察场景
+    round_camera: bool = False 
+    round_center: Tuple[float, float, float] = (0, 0.25, 0) #相机轨迹的圆心
+    radius: float = 0.1 #相机轨迹的半径
+    look_direction: str = 'outside' #相机看向的方向，inside看向圆心，outside看向圆外
+    
 
 
 class RandomCameraDataset(Dataset):
@@ -103,42 +117,102 @@ class RandomCameraDataset(Dataset):
         else:
             self.n_views = self.cfg.n_test_views
 
-        azimuth_deg: Float[Tensor, "B"]
+        self.rota_camera = self.cfg.rota_camera
+        self.camera_position = self.cfg.camera_position
+        self.camera_eval = self.cfg.camera_eval
+        self.rotation_angle = self.cfg.rotation_angle
+
+        self.round_camera = self.cfg.round_camera
+        self.round_center = self.cfg.round_center
+        self.radius = self.radius
+        self.look_direction = self.look_direction
+
         
+
+        azimuth_deg: Float[Tensor, "B"]
         if self.split == "val":
             # make sure the first and last view are not the same
             azimuth_deg = torch.linspace(0., 360.0, self.n_views + 1)[: self.n_views]
-        else:
-            azimuth_deg = torch.linspace(0., 360.0, self.n_views)
-            
-        elevation_deg: Float[Tensor, "B"] = torch.full_like(
+            elevation_deg: Float[Tensor, "B"] = torch.full_like(
             azimuth_deg, self.cfg.eval_elevation_deg
-        )
-        camera_distances: Float[Tensor, "B"] = torch.full_like(
-            elevation_deg, self.cfg.eval_camera_distance
-        )
+            )
+            camera_distances: Float[Tensor, "B"] = torch.full_like(
+                elevation_deg, self.cfg.eval_camera_distance
+            )
 
-        elevation = elevation_deg * math.pi / 180
-        azimuth = azimuth_deg * math.pi / 180
+            elevation = elevation_deg * math.pi / 180
+            azimuth = azimuth_deg * math.pi / 180
 
-        # convert spherical coordinates to cartesian coordinates
-        # right hand coordinate system, x back, y right, z up
-        # elevation in (-90, 90), azimuth from +x to +y in (-180, 180)
-        camera_positions: Float[Tensor, "B 3"] = torch.stack(
-            [
-                camera_distances * torch.cos(elevation) * torch.cos(azimuth),
-                camera_distances * torch.cos(elevation) * torch.sin(azimuth),
-                camera_distances * torch.sin(elevation),
-            ],
+            # convert spherical coordinates to cartesian coordinates
+            # right hand coordinate system, z front, x right, y up
+            # elevation in (-90, 90), azimuth from +x to +y in (-180, 180)
+            camera_positions: Float[Tensor, "B 3"] = torch.stack(
+                [
+                    camera_distances * torch.cos(elevation) * torch.cos(azimuth),
+                    camera_distances * torch.sin(elevation),
+                    camera_distances * torch.cos(elevation) * torch.sin(azimuth),
+                    
+                ],
+                dim=-1,
+            )
+
+            # default scene center at origin
+            target_points: Float[Tensor, "B 3"] = torch.zeros_like(camera_positions)
+        else:
+            ###################
+            if self.rota_camera:
+                camera_positions = torch.tensor([self.camera_position]).repeat(self.n_views)
+
+                elevation_deg = self.camera_eval 
+                rotation_angle = torch.linspace(0., self.rotation_angle, self.n_views)
+                radius = math.fabs(self.camera_position)[1] / math.tan(math.fabs(elevation_deg) * math.pi / 180.0)
+                center = torch.tensor([self.camera_position[0], 0, self.camera_position[2]]).repeat(self.n_views)
+                target_points = torch.stack([torch.cos(rotation_angle * math.pi / 180.0) * radius, torch.zeros_like(rotation_angle), torch.sin(rotation_angle * math.pi / 180.0) * radius], dim=1)
+                target_points = target_points + center
+
+            ###################
+            ###################
+            elif self.round_camera:
+                round_center = torch.tensor([self.round_center]).repeat(self.n_views)
+                radius = self.radius
+                rotation_angle = torch.linspace(0., 360., self.n_views)
+                display = torch.stack([torch.cos(rotation_angle * math.pi / 180.0) * radius, torch.zeros_like(rotation_angle), torch.sin(rotation_angle * math.pi / 180.0) * radius], dim=1)
+                camera_positions = display + round_center
+                if self.look_direction == "outside":
+                    radius_target = radius *1.5
+                    display_targets = torch.stack([torch.cos(rotation_angle * math.pi / 180.0) * radius_target, torch.zeros_like(rotation_angle), torch.sin(rotation_angle * math.pi / 180.0) * radius_target], dim=1)
+                    target_points = display_targets + round_center
+                elif self.look_direction == "inside":
+                    target_points = round_center
+                else:
+                    raise ValueError("look_direction only supports 'outside' and 'inside'")
+            ###################
+        
+        # default camera up direction as +y
+        lookat: Float[Tensor, "B 3"] = F.normalize(target_points - camera_positions, dim=-1)
+        right: Float[Tensor, "B 3"] = F.normalize(torch.cross(lookat, up,dim=-1), dim=-1)
+
+        #修正up向量
+        up = F.normalize(torch.cross(right, lookat,dim=-1), dim=-1)
+
+        c2w3x4: Float[Tensor, "B 3 4"] = torch.cat(
+            [torch.stack([right, up, lookat], dim=-1), camera_positions[:, :, None]],
             dim=-1,
         )
+        c2w: Float[Tensor, "B 4 4"] = torch.cat(
+            [c2w3x4, torch.zeros_like(c2w3x4[:, :1])], dim=1
+        )
+        c2w[:, 3, 3] = 1.0
 
-        # default scene center at origin
-        center: Float[Tensor, "B 3"] = torch.zeros_like(camera_positions)
-        # default camera up direction as +z
-        up: Float[Tensor, "B 3"] = torch.as_tensor([0, 0, 1], dtype=torch.float32)[
-            None, :
-        ].repeat(self.cfg.eval_batch_size, 1)
+        #这里也可以用c2w的逆来获取w2c，但是这种方式计算出的w2c会有一点偏差
+        w2c3x4 = torch.cat(
+            [torch.stack([right, up, lookat], dim=1), torch.stack([right, up, lookat], dim=1) @ (-camera_positions[:, :, None])],
+            dim=-1,
+        )
+        w2c = torch.cat(
+            [w2c3x4, torch.zeros_like(w2c3x4[:, :1])], dim=1
+        )
+        w2c[:, 3, 3] = 1.0
 
         fovy_deg: Float[Tensor, "B"] = torch.full_like(
             elevation_deg, self.cfg.eval_fovy_deg
@@ -146,17 +220,7 @@ class RandomCameraDataset(Dataset):
         fovy = fovy_deg * math.pi / 180
         light_positions: Float[Tensor, "B 3"] = camera_positions
 
-        lookat: Float[Tensor, "B 3"] = F.normalize(center - camera_positions, dim=-1)
-        right: Float[Tensor, "B 3"] = F.normalize(torch.cross(lookat, up), dim=-1)
-        up = F.normalize(torch.cross(right, lookat), dim=-1)
-        c2w3x4: Float[Tensor, "B 3 4"] = torch.cat(
-            [torch.stack([right, up, -lookat], dim=-1), camera_positions[:, :, None]],
-            dim=-1,
-        )
-        c2w: Float[Tensor, "B 4 4"] = torch.cat(
-            [c2w3x4, torch.zeros_like(c2w3x4[:, :1])], dim=1
-        )
-        c2w[:, 3, 3] = 1.0
+        
 
         # get directions by dividing directions_unit_focal by focal length
         focal_length: Float[Tensor, "B"] = (
@@ -196,6 +260,7 @@ class RandomCameraDataset(Dataset):
         c2w_3dgs = torch.stack(c2w_3dgs, 0)
         self.mvp_mtx = mvp_mtx
         self.c2w = c2w
+        self.w2c = w2c
         self.c2w_3dgs = c2w
         self.camera_positions = camera_positions
         self.light_positions = light_positions
@@ -211,6 +276,7 @@ class RandomCameraDataset(Dataset):
         return {
             "index": index,
             "mvp_mtx": self.mvp_mtx[index],
+            "w2c": self.w2c[index],
             "c2w": self.c2w[index],
             "c2w_3dgs": self.c2w_3dgs[index],
             "camera_positions": self.camera_positions[index],
@@ -227,6 +293,7 @@ class RandomCameraDataset(Dataset):
         batch = torch.utils.data.default_collate(batch)
         batch.update({"height": self.cfg.eval_height, "width": self.cfg.eval_width})
         return batch
+
 
 
 @register("random-outward-camera-datamodule")
