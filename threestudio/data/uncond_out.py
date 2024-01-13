@@ -94,7 +94,7 @@ class RandomCameraDataModuleConfig:
     #该部分参数用于test部分，固定相机在某个位置，旋转相机观察场景
     rota_camera: bool = True #该参数用于控制使用旋转相机
     camera_position: Tuple[float, float, float] = (0, 0.25, 0) #相机固定位置
-    camera_eval: float = -10 #相机固定仰角，负值相机向下看，正值相机向上看
+    camera_eval: float = -45 #相机固定仰角，负值相机向下看，正值相机向上看
     rotation_angle: float = 360 #相机旋转角度，360度为一圈
 
     ###
@@ -167,8 +167,8 @@ class RandomCameraDataset(Dataset):
                 rotation_angle = torch.linspace(0., self.rotation_angle, self.n_views)
                 radius = math.fabs(self.camera_position)[1] / math.tan(math.fabs(elevation_deg) * math.pi / 180.0)
                 center = torch.tensor([self.camera_position[0], 0, self.camera_position[2]]).repeat(self.n_views)
-                target_points = torch.stack([torch.cos(rotation_angle * math.pi / 180.0) * radius, torch.zeros_like(rotation_angle), torch.sin(rotation_angle * math.pi / 180.0) * radius], dim=1)
-                target_points = target_points + center
+                target_display = torch.stack([torch.cos(rotation_angle * math.pi / 180.0) * radius, torch.zeros_like(rotation_angle), torch.sin(rotation_angle * math.pi / 180.0) * radius], dim=1)
+                target_points = target_display + center
 
             ###################
             ###################
