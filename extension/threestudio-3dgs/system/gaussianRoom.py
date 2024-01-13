@@ -73,8 +73,8 @@ class GaussianRoom(BaseLift3DSystem):
 
         visibility_filter = out["visibility_filter"]
         radii = out["radii"]
-        guidance_inp = out["comp_rgb"]
-        guidance_cond = out["comp_depth"]
+        guidance_inp = out["comp_rgb"]  # BHWC, c=3, [0, 1]
+        guidance_cond = out["comp_depth"] # BHWC, c=1, not normalized
         viewspace_point_tensor = out["viewspace_points"]
         
         # * >>> For Debug >>>
