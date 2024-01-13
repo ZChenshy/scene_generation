@@ -189,6 +189,8 @@ class RandomCameraDataset(Dataset):
             ###################
         
         # default camera up direction as +y
+        up: Float[Tensor, "B 3"] = torch.as_tensor([0 , 1 , 0], dtype=torch.float32)[
+            None, :].repeat(self.batch_size, 1)
         lookat: Float[Tensor, "B 3"] = F.normalize(target_points - camera_positions, dim=-1)
         right: Float[Tensor, "B 3"] = F.normalize(torch.cross(lookat, up,dim=-1), dim=-1)
 
