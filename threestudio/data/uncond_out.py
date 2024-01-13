@@ -124,9 +124,9 @@ class RandomCameraDataset(Dataset):
 
         self.round_camera = self.cfg.round_camera
         self.round_center = self.cfg.round_center
-        self.radius = self.radius
-        self.look_direction = self.look_direction
-
+        self.radius = self.cfg.radius
+        self.look_direction = self.cfg.look_direction
+        self.batch_size = self.n_views
         
 
         azimuth_deg: Float[Tensor, "B"]

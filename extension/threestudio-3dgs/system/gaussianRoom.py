@@ -8,7 +8,7 @@ from threestudio.systems.base import BaseLift3DSystem
 from threestudio.systems.utils import parse_optimizer
 from threestudio.utils.loss import tv_loss
 from threestudio.utils.typing import *
-
+import os
 from ..geometry.gaussian_base import BasicPointCloud, Camera
 
 
@@ -82,8 +82,9 @@ class GaussianRoom(BaseLift3DSystem):
         rgb_min = torch.min(guidance_inp[0])
         depth_max = torch.max(guidance_cond[0])
         depth_min = torch.min(guidance_cond[0])
-        
+        os.makedirs("./test_result", exist_ok=True)
         rgb = PIL.Image.fromarray((guidance_inp[0].cpu().detach().numpy() * 255).astype(np.uint8), "RGB")
+        
         rgb.save(f"./test_result/guidance_inp_{self.true_global_step}.png")
         
         depth = (guidance_cond[0] - depth_min) / (depth_max - depth_min) 
