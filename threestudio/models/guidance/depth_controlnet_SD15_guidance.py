@@ -148,7 +148,9 @@ class ControlnetGuidance(BaseObject):
         image = image.permute(0, 3, 1, 2)
         min_values = torch.amin(image, dim=[2, 3], keepdim=True)
         max_values = torch.amax(image, dim=[2, 3], keepdim=True)
-        normalized_image = (image - min_values) / (max_values - min_values)
+        # ! reverse
+        normalized_image = 1 - ((image - min_values) / (max_values - min_values))
+        #normalized_image = (image - min_values) / (max_values - min_values)
         normalized_image.to(image.dtype)
         return normalized_image
     

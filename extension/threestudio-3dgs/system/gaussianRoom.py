@@ -9,6 +9,7 @@ from threestudio.systems.utils import parse_optimizer
 from threestudio.utils.loss import tv_loss
 from threestudio.utils.typing import *
 import os
+import matplotlib.pyplot as plt
 from ..geometry.gaussian_base import BasicPointCloud, Camera
 
 
@@ -73,26 +74,28 @@ class GaussianRoom(BaseLift3DSystem):
 
         visibility_filter = out["visibility_filter"]
         radii = out["radii"]
-        guidance_inp = out["comp_rgb"]
-        guidance_cond = out["comp_depth"]
+        guidance_inp = out["comp_rgb"]  # BHWC, c=3, [0, 1]
+        guidance_cond = out["comp_depth"] # BHWC, c=1, not normalized
         viewspace_point_tensor = out["viewspace_points"]
         
-        # * >>> For Debug >>>
-        rgb_max = torch.max(guidance_inp[0])
-        rgb_min = torch.min(guidance_inp[0])
-        depth_max = torch.max(guidance_cond[0])
-        depth_min = torch.min(guidance_cond[0])
-        os.makedirs("./test_result", exist_ok=True)
-        rgb = PIL.Image.fromarray((guidance_inp[0].cpu().detach().numpy() * 255).astype(np.uint8), "RGB")
+        #! >>> For Debug >>>
+        # rgb_max = torch.max(guidance_inp[0])
+        # rgb_min = torch.min(guidance_inp[0])
+        # depth_max = torch.max(guidance_cond[0])
+        # depth_min = torch.min(guidance_cond[0])
+        # os.makedirs("./test_result", exist_ok=True)
+        # rgb = PIL.Image.fromarray((guidance_inp[0].cpu().detach().numpy() * 255).astype(np.uint8), "RGB")
+        # img = (guidance_inp[0].cpu().detach().numpy() * 255).astype(np.uint8)
+        # plt.imshow(img)
+        # plt.show()
+        # rgb.save(f"./test_result/guidance_inp_{self.true_global_step}.png")
         
-        rgb.save(f"./test_result/guidance_inp_{self.true_global_step}.png")
-        
-        depth = (guidance_cond[0] - depth_min) / (depth_max - depth_min) 
-        depth_array = depth.cpu().detach().numpy().squeeze()
-        depth_array = (depth_array * 255).astype(np.uint8)
-        depth = PIL.Image.fromarray(depth_array, "L")
-        depth.save(f"./test_result/guidance_cond_{self.true_global_step}.png")
-        # * <<< Debug <<<
+        # depth = (guidance_cond[0] - depth_min) / (depth_max - depth_min) 
+        # depth_array = depth.cpu().detach().numpy().squeeze()
+        # depth_array = (depth_array * 255).astype(np.uint8)
+        # depth = PIL.Image.fromarray(depth_array, "L")
+        # depth.save(f"./test_result/guidance_cond_{self.true_global_step}.png")
+        #! <<< Debug <<<
         
         guidance_out = self.guidance(
             rgb=guidance_inp, image_cond=guidance_cond, 
@@ -201,17 +204,6 @@ class GaussianRoom(BaseLift3DSystem):
                 ]
                 if "comp_normal" in out
                 else []
-            ) 
-            + (
-                [
-                    {
-                        "type": "grayscale",
-                        "img": out["comp_depth"][0],
-                        "kwargs": {"data_format": "HWC", "data_range": (0, 1)},
-                    }
-                ]
-                if "comp_depth" in out
-                else []
             ),
             name="validation_step",
             step=self.global_step,
@@ -243,20 +235,7 @@ class GaussianRoom(BaseLift3DSystem):
                 ]
                 if "comp_normal" in out
                 else []
-            )
-            + (
-                [
-                    {
-                        "type": "grayscale",
-                        "img": out["comp_depth"][0],
-                        "kwargs": {"data_format": "HWC", "data_range": (0, 1)},
-                    }
-                ]
-                if "comp_depth" in out
-                else []
             ),
-            name="test_step",
-            step=self.global_step,
         )
         if batch["index"][0] == 0:
             save_path = self.get_save_path("point_cloud.ply")
