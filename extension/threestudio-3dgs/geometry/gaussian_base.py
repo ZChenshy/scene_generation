@@ -15,7 +15,7 @@ import sys
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import NamedTuple
-
+import trimesh
 import numpy as np
 import threestudio
 import torch
@@ -308,22 +308,15 @@ class GaussianBaseModel(BaseGeometry, GaussianIO):
                 self.load_state_dict(new_ckpt_dict)
             elif self.cfg.geometry_convert_from.endswith(".ply"):
                 if self.cfg.load_ply_only_vertex:
-                    plydata = PlyData.read(self.cfg.geometry_convert_from)
-                    vertices = plydata["vertex"]
-                    positions = np.vstack(
-                        [vertices["x"], vertices["y"], vertices["z"]]
-                    ).T
-                    if vertices.__contains__("red"):
-                        colors = (
-                            np.vstack(
-                                [vertices["red"], vertices["green"], vertices["blue"]]
-                            ).T
-                            / 255.0
-                        )
-                    else:
-                        shs = np.random.random((positions.shape[0], 3)) / 255.0
-                        C0 = 0.28209479177387814
-                        colors = shs * C0 + 0.5
+                    pcd = trimesh.load(self.cfg.geometry_convert_from)
+                    pcd = normal_scene(pcd)
+                    #! >>>debug
+                    #pcd.show()
+                    #! <<<
+                    positions = np.array(pcd.vertices)
+                    shs = np.random.random((positions.shape[0], 3)) / 255.0
+                    C0 = 0.28209479177387814
+                    colors = shs * C0 + 0.5
                     normals = np.zeros_like(positions)
                     pcd = BasicPointCloud(
                         points=positions, colors=colors, normals=normals
@@ -836,3 +829,13 @@ class GaussianBaseModel(BaseGeometry, GaussianIO):
             and iteration % self.cfg.densification_interval == 0
         ):
             self.densify(self.cfg.densify_grad_threshold)
+
+def normal_scene(scene):
+    points = scene.vertices
+    scene_bbox = scene.bounds
+    scene_centroid = scene.centroid
+    scene.vertices = scene.vertices - scene_centroid
+    scale_factor = 1 / (scene_bbox[1][1] - scene_bbox[0][0])
+    scene.vertices = scene.vertices  * np.array([scale_factor, scale_factor, scale_factor])
+    return scene
+
