@@ -180,7 +180,7 @@ pyrightconfig.json
 outputs/
 outputs-gradio/
 test_result/
-
+submodules/*
 
 # pretrained model weights
 *.ckpt
