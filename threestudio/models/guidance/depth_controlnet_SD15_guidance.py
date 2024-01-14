@@ -37,7 +37,7 @@ class ControlnetGuidance(BaseObject):
         enable_attention_slicing: bool = False
         enable_channels_last_format: bool = False
         
-        guidance_scale: float = 7.5 # classifier free guidance
+        guidance_scale: float = 100# classifier free guidance
         condition_scale: float = 0.75 # Diffusers recommends 0.5
         
         grad_clip: Optional[
@@ -299,8 +299,9 @@ class ControlnetGuidance(BaseObject):
         **kwargs,
     ):
         batch_size = rgb.shape[0]
-        assert rgb.shape[1] == image_cond.shape[1] # 让渲染图与条件图大小相同
-        assert len(rgb.shape) == len(image_cond.shape) == 4
+        if not rgb_as_latents:
+            assert rgb.shape[1] == image_cond.shape[1] # 让渲染图与条件图大小相同
+            assert len(rgb.shape) == len(image_cond.shape) == 4
         
         # TODO: 使用ViewDependtent Prompt Processor之后，需要修改
         temp = torch.zeros(1).to(rgb.device)
