@@ -25,7 +25,7 @@ data:
 
   ####
 
-  n_val_views: 4
+  n_val_views: 1
   eval_elevation_deg: 45
   eval_camera_distance: 0.8
   eval_fovy_deg: 60
@@ -80,9 +80,10 @@ system:
     pretrained_model_name_or_path: "/remote-home/share/Models/runwayml/stable-diffusion-v1-5" 
     controlnet_name_or_path: "/remote-home/share/Models/lllyasviel/control_v11f1p_sd15_depth" 
     ddim_scheduler_name_or_path: "/remote-home/share/Models/runwayml/stable-diffusion-v1-5" 
-    guidance_scale: 100 # 7.5 for csd
-    condition_scale: 0.5 # Depth conditioning_scale
-    weighting_strategy: sds
+    half_precision_weights: false
+    guidance_scale: 3 # 7.5 for csd
+    condition_scale: 0.75 # Depth conditioning_scale
+    weighting_strategy: csd
     min_step_percent: 0.02
     max_step_percent: 0.98
     grad_clip: [0, 1.5, 2.0, 1000]
@@ -105,7 +106,7 @@ system:
 
 
 trainer:
-  max_steps: 5000
+  max_steps: 10000 
   log_every_n_steps: 1
   num_sanity_val_steps: 0
   val_check_interval: 100
