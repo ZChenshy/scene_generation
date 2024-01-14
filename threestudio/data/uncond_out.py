@@ -93,7 +93,7 @@ class RandomCameraDataModuleConfig:
     ###
     #该部分参数用于test部分，固定相机在某个位置，旋转相机观察场景
     rota_camera: bool = True #该参数用于控制使用旋转相机
-    camera_position: Tuple[float, float, float] = (0, 0.25, 0) #相机固定位置
+    camera_position: Tuple[float, float, float] = (0, 0.1, 0) #相机固定位置
     camera_eval: float = -45 #相机固定仰角，负值相机向下看，正值相机向上看
     rotation_angle: float = 360 #相机旋转角度，360度为一圈
 
@@ -126,8 +126,6 @@ class RandomCameraDataset(Dataset):
         self.round_center = self.cfg.round_center
         self.radius = self.cfg.radius
         self.look_direction = self.cfg.look_direction
-        self.batch_size = self.n_views
-        
 
         azimuth_deg: Float[Tensor, "B"]
         if self.split == "val":
@@ -161,19 +159,19 @@ class RandomCameraDataset(Dataset):
         else:
             ###################
             if self.rota_camera:
-                camera_positions = torch.tensor([self.camera_position]).repeat(self.n_views)
-
+                camera_positions = torch.tensor([self.camera_position]).repeat(self.n_views, 1)
+                
                 elevation_deg = self.camera_eval 
                 rotation_angle = torch.linspace(0., self.rotation_angle, self.n_views)
-                radius = math.fabs(self.camera_position)[1] / math.tan(math.fabs(elevation_deg) * math.pi / 180.0)
-                center = torch.tensor([self.camera_position[0], 0, self.camera_position[2]]).repeat(self.n_views)
+                radius = math.fabs(torch.tensor(self.camera_position)[1]) / math.tan(math.fabs(elevation_deg) * math.pi / 180.0)
+                center = torch.tensor([self.camera_position[0], 0, self.camera_position[2]]).repeat(self.n_views, 1)
                 target_display = torch.stack([torch.cos(rotation_angle * math.pi / 180.0) * radius, torch.zeros_like(rotation_angle), torch.sin(rotation_angle * math.pi / 180.0) * radius], dim=1)
                 target_points = target_display + center
 
             ###################
             ###################
             elif self.round_camera:
-                round_center = torch.tensor([self.round_center]).repeat(self.n_views)
+                round_center = torch.tensor([self.round_center]).repeat(self.n_views, 1)
                 radius = self.radius
                 rotation_angle = torch.linspace(0., 360., self.n_views)
                 display = torch.stack([torch.cos(rotation_angle * math.pi / 180.0) * radius, torch.zeros_like(rotation_angle), torch.sin(rotation_angle * math.pi / 180.0) * radius], dim=1)
@@ -189,10 +187,9 @@ class RandomCameraDataset(Dataset):
             ###################
         
         # default camera up direction as +y
-        up: Float[Tensor, "B 3"] = torch.as_tensor([0 , 1 , 0], dtype=torch.float32)[
-            None, :].repeat(self.batch_size, 1)
+        up: Float[Tensor, "B 3"] = torch.as_tensor([0 , -1 , 0], dtype=torch.float32)[None, :].repeat(self.cfg.batch_size, 1)
         lookat: Float[Tensor, "B 3"] = F.normalize(target_points - camera_positions, dim=-1)
-        right: Float[Tensor, "B 3"] = F.normalize(torch.cross(lookat, up,dim=-1), dim=-1)
+        right: Float[Tensor, "B 3"] = F.normalize(torch.cross(lookat, up, dim=-1), dim=-1)
 
         #修正up向量
         up = F.normalize(torch.cross(right, lookat,dim=-1), dim=-1)
@@ -216,9 +213,7 @@ class RandomCameraDataset(Dataset):
         )
         w2c[:, 3, 3] = 1.0
 
-        fovy_deg: Float[Tensor, "B"] = torch.full_like(
-            elevation_deg, self.cfg.eval_fovy_deg
-        )
+        fovy_deg: Float[Tensor, "B"] = torch.tensor(self.cfg.eval_fovy_deg).repeat(self.n_views)
         fovy = fovy_deg * math.pi / 180
         light_positions: Float[Tensor, "B 3"] = camera_positions
 
@@ -243,36 +238,20 @@ class RandomCameraDataset(Dataset):
         )  # FIXME: hard-coded near and far
         mvp_mtx: Float[Tensor, "B 4 4"] = get_mvp_matrix(c2w, proj_mtx)
 
-        c2w_3dgs = []
-        for id in range(self.n_views):
-            # TODO : render_pose fix
-            # origin code : render_pose = pose_spherical( azimuth_deg[id] + 180.0 - self.load_type*90, -elevation_deg[id], camera_distances[id])
-            render_pose = pose_spherical( azimuth_deg[id] + 180.0, -elevation_deg[id], camera_distances[id])
-            
-            matrix = torch.linalg.inv(render_pose)
-            # R = -np.transpose(matrix[:3,:3])
-            # R = -np.transpose(matrix[:3,:3])
-            R = -torch.transpose(matrix[:3,:3], 0, 1)
-            R[:,0] = -R[:,0]
-            T = -matrix[:3, 3]
-            c2w_single = torch.cat([R, T[:,None]], 1)
-            c2w_single = torch.cat([c2w_single, torch.tensor([[0,0,0,1]])], 0)
-            # c2w_single = convert_camera_to_world_transform(c2w_single)
-            c2w_3dgs.append(c2w_single)
-        c2w_3dgs = torch.stack(c2w_3dgs, 0)
         self.mvp_mtx = mvp_mtx
         self.c2w = c2w
         self.w2c = w2c
-        self.c2w_3dgs = c2w
         self.camera_positions = camera_positions
         self.light_positions = light_positions
-        self.elevation, self.azimuth = elevation, azimuth
-        self.elevation_deg, self.azimuth_deg = elevation_deg, azimuth_deg
-        self.camera_distances = camera_distances
+        self.elevation, self.azimuth = 45, 45
+        self.elevation_deg, self.azimuth_deg = 45,45
+        self.camera_distances = 0.3
         self.fovy = fovy
+
 
     def __len__(self):
         return self.n_views
+
 
     def __getitem__(self, index):
         return {
@@ -280,12 +259,11 @@ class RandomCameraDataset(Dataset):
             "mvp_mtx": self.mvp_mtx[index],
             "w2c": self.w2c[index],
             "c2w": self.c2w[index],
-            "c2w_3dgs": self.c2w_3dgs[index],
             "camera_positions": self.camera_positions[index],
             "light_positions": self.light_positions[index],
-            "elevation": self.elevation_deg[index],
-            "azimuth": self.azimuth_deg[index],
-            "camera_distances": self.camera_distances[index],
+            "elevation": self.elevation_deg,
+            "azimuth": self.azimuth_deg,
+            "camera_distances": self.camera_distances,
             "height": self.cfg.eval_height,
             "width": self.cfg.eval_width,
             "fovy":self.fovy[index],
