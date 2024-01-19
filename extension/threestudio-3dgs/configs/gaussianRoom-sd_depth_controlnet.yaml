@@ -21,7 +21,7 @@ data:
   #################################################################################################
   fix_elevation_deg: 90 #角度制
   fix_azimuth_deg: 80 #角度制,这里暂时未使用
-  fix_camera_distance: 0.25 
+  fix_camera_distance: 0.10
 
   ####
 
@@ -35,13 +35,14 @@ system:
 
   geometry_type: "gaussian-splatting"
   geometry:
-    position_lr: [0, 0.001, 0.00002, 1000]
+    max_num: 8000000
+    position_lr: [0, 0.00005, 0.000025, 1000]
     scale_lr: 0.005
     feature_lr: 0.01
     opacity_lr: 0.05
-    rotation_lr: 0.005
-    densification_interval: 300
-    prune_interval: 300
+    rotation_lr: 0.001
+    densification_interval: 100
+    prune_interval: 100
     opacity_reset_interval: 50000000
     densify_from_iter: 500
     densify_until_iter: ${trainer.max_steps}
@@ -81,9 +82,9 @@ system:
     controlnet_name_or_path: "/remote-home/share/Models/lllyasviel/control_v11f1p_sd15_depth" 
     ddim_scheduler_name_or_path: "/remote-home/share/Models/runwayml/stable-diffusion-v1-5" 
     half_precision_weights: false
-    guidance_scale: 3 # 7.5 for csd
+    guidance_scale: 100 # 7.5 for csd
     condition_scale: 0.75 # Depth conditioning_scale
-    weighting_strategy: csd
+    weighting_strategy: sds
     min_step_percent: 0.02
     max_step_percent: 0.98
     grad_clip: [0, 1.5, 2.0, 1000]
@@ -97,16 +98,16 @@ system:
       name: None
 
   loss:
-    lambda_sds: 0.1
-    lambda_position: 1.0
-    lambda_opacity: 0.0001
-    lambda_scales: 0.0001
+    lambda_sds: 1.0
+    lambda_position: 0.0001
+    lambda_opacity: 0.1
+    lambda_scales: 0.001
     lambda_tv_loss: 1.0
     lambda_depth_tv_loss: 0.0 # original 1.0
 
 
 trainer:
-  max_steps: 10000 
+  max_steps: 2000 
   log_every_n_steps: 1
   num_sanity_val_steps: 0
   val_check_interval: 100
