@@ -19,16 +19,15 @@ class XLContrlnetGuidance(BaseObject):
     class Config(BaseObject.Config):
         cache_dir: Optional[str] = None
         
-        pretrained_model_name_or_path: str = "stabilityai/stable-diffusion-xl-base-0.9"
+        pretrained_model_name_or_path: str = "stabilityai/stable-diffusion-xl-base-1.0"
         controlnet_name_or_path: str = "diffusers/controlnet-depth-sdxl-1.0"
-        vae_pretrained_path: str = "madebyollin/sdxl-vae-fp16-fix"
         
         enable_memory_efficient_attention: bool = False
         enable_sequential_cpu_offload: bool = False
         enable_attention_slicing: bool = False
         enable_channels_last_format: bool = False
         
-        guidance_scale: float = 7.5 # classifier free guidance
+        guidance_scale: float = 100 # classifier free guidance
         condition_scale: float = 0.75 # Diffusers recommends 0.5
         
         force_zeros_for_empty_prompt: bool = False # TODO 实现并测试这个参数对效果的影响
@@ -42,9 +41,9 @@ class XLContrlnetGuidance(BaseObject):
         min_step_percent: float = 0.02
         max_step_percent: float = 0.98
         
-        diffusion_steps: int = 20 # 与ThreeStudio中ControlNet Guidance相同默认为20
+        diffusion_steps: int = 30 # 与ThreeStudio中ControlNet Guidance相同默认为20
         
-        weighting_strategy: str = "csd"
+        weighting_strategy: str = "sds"
         
     cfg : Config
     
@@ -62,18 +61,11 @@ class XLContrlnetGuidance(BaseObject):
             cache_dir=self.cfg.cache_dir,
         ).to(self.device)
         
-        self.vae = AutoencoderKL.from_pretrained(
-            self.cfg.pretrained_model_name_or_path,
-            torch_dtype=self.weights_dtype, 
-            cache_dir=self.cfg.cache_dir,
-            subfolder="vae"
-        ).to(self.device)
-        
-        self.unet = UNet2DConditionModel.from_pretrained(
+        self.pipe = StableDiffusionXLControlNetPipeline.from_pretrained(
             self.cfg.pretrained_model_name_or_path,
             torch_dtype=self.weights_dtype,
+            controlnet=controlnet,
             cache_dir=self.cfg.cache_dir,
-            subfolder="unet",
         ).to(self.device)
         
         self.scheduler = DDIMScheduler.from_pretrained(
@@ -108,9 +100,9 @@ class XLContrlnetGuidance(BaseObject):
             
         cleanup()
             
-        self.vae = self.vae.eval()
-        self.unet = self.unet.eval()
-        self.controlnet = self.controlnet.eval()
+        self.vae = self.pipe.vae.eval()
+        self.unet = self.pipe.unet.eval()
+        self.controlnet = self.pipe.controlnet.eval()
         
         for p in self.vae.parameters():
             p.requires_grad_(False)
