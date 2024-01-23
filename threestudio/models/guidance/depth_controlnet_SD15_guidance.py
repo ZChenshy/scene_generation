@@ -43,14 +43,14 @@ class ControlnetGuidance(BaseObject):
         grad_clip: Optional[
             Any
         ] = None  # field(default_factory=lambda: [0, 2.0, 8.0, 1000])
-        half_precision_weights: bool = True
+        half_precision_weights: bool = False
 
         fixed_size: int = -1 # TODO: Determine what this is for
         
         min_step_percent: float = 0.02
         max_step_percent: float = 0.98
         
-        diffusion_steps: int = 20 # 与ThreeStudio中ControlNet Guidance相同默认为20
+        diffusion_steps: int = 30 # 与ThreeStudio中ControlNet Guidance相同默认为20
         
         weighting_strategy: str = "sds"
 
@@ -149,8 +149,8 @@ class ControlnetGuidance(BaseObject):
         min_values = torch.amin(image, dim=[2, 3], keepdim=True)
         max_values = torch.amax(image, dim=[2, 3], keepdim=True)
         # ! reverse
-        normalized_image = 1 - ((image - min_values) / (max_values - min_values))
-        #normalized_image = (image - min_values) / (max_values - min_values)
+        #normalized_image = 1 - ((image - min_values) / (max_values - min_values))
+        normalized_image = (image - min_values) / (max_values - min_values)
         normalized_image.to(image.dtype)
         return normalized_image
     

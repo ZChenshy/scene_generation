@@ -438,7 +438,7 @@ class RandomCameraIterableDatasetCustom(IterableDataset, Updateable):
         fovy = fovy_deg * math.pi / 180
 
 
-        if self.fix ==True:
+        if self.fix == True:
             """
             使用固定的相机位置
             """
@@ -517,10 +517,8 @@ class RandomCameraIterableDatasetCustom(IterableDataset, Updateable):
 
         for i in range(self.batch_size):
             angle = torch.rand(1) * (2 * math.pi)
-            dx_dis = torch.normal(0.15, 0.1, size = ())
-            dy_dis = torch.normal(0.15, 0.1, size = ()) 
-            dx_dis = torch.clamp(dx_dis, 0, 0.15) * math.cos(angle)
-            dy_dis = torch.clamp(dy_dis, 0, 0.15) * math.sin(angle)
+            dx_dis = torch.rand(1) * 0.15 * math.cos(angle)
+            dy_dis = torch.rand(1) * 0.15 * math.sin(angle)
             dz_dis = torch.rand(1) * 0.15
             target_points[i, :] = target_points[i, :] + torch.tensor([dx_dis, dy_dis, dz_dis])
         

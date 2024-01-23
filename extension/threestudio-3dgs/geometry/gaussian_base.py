@@ -321,7 +321,7 @@ class GaussianBaseModel(BaseGeometry, GaussianIO):
                     pcd = BasicPointCloud(
                         points=positions, colors=colors, normals=normals
                     )
-                    self.create_from_pcd(pcd, 10)
+                    self.create_from_pcd(pcd, 1)
                 else:
                     self.load_ply(self.cfg.geometry_convert_from)
                 self.training_setup()
