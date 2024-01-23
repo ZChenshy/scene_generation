@@ -86,22 +86,22 @@ class RandomCameraDataModuleConfig:
     light_distance_range: Tuple[float, float] = (0.8, 1.5)
     eval_elevation_deg: float = 15.0
     eval_camera_distance: float = 6.
-    eval_fovy_deg: float = 70.0
+    eval_fovy_deg: float = 40
     light_sample_strategy: str = "dreamfusion"
     batch_uniform_azimuth: bool = True
     progressive_until: int = 0  # progressive ranges for elevation, azimuth, r, fovy
     ###
     #该部分参数用于test部分，固定相机在某个位置，旋转相机观察场景
-    rota_camera: bool = True #该参数用于控制使用旋转相机
+    rota_camera: bool = False #该参数用于控制使用旋转相机
     camera_position: Tuple[float, float, float] = (0, 0.1, 0) #相机固定位置
     camera_eval: float = -45 #相机固定仰角，负值相机向下看，正值相机向上看
     rotation_angle: float = 360 #相机旋转角度，360度为一圈
 
     ###
     #该部分参数用于test部分，相机轨迹为一个圆，相机在圆上运动，观察场景
-    round_camera: bool = False 
-    round_center: Tuple[float, float, float] = (0, 0.25, 0) #相机轨迹的圆心
-    radius: float = 0.1 #相机轨迹的半径
+    round_camera: bool = True 
+    round_center: Tuple[float, float, float] = (0.03, 0.03, 0.1) #相机轨迹的圆心
+    radius: float = 0.03 #相机轨迹的半径
     look_direction: str = 'outside' #相机看向的方向，inside看向圆心，outside看向圆外
     
 

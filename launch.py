@@ -299,3 +299,12 @@ if __name__ == "__main__":
             main(args, extras)
     else:
         main(args, extras)
+
+
+
+Host github.com
+User 1790328901@qq.com
+Hostname ssh.github.com
+PreferredAuthentications publickey
+IdentityFile /remote-home/abao/repositories/.ssh/id_rsa
+Port 443
