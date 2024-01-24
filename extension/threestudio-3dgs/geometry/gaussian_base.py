@@ -314,9 +314,10 @@ class GaussianBaseModel(BaseGeometry, GaussianIO):
                     #pcd.show()
                     #! <<<
                     positions = np.array(pcd.vertices)
+                    colors = pcd.colors[:, 0:3]
                     shs = np.random.random((positions.shape[0], 3)) / 255.0
-                    C0 = 0.28209479177387814
-                    colors = shs * C0 + 0.5
+                    # C0 = 0.28209479177387814
+                    # colors = shs * C0 + 0.5
                     normals = np.zeros_like(positions)
                     pcd = BasicPointCloud(
                         points=positions, colors=colors, normals=normals
@@ -390,7 +391,7 @@ class GaussianBaseModel(BaseGeometry, GaussianIO):
     def create_from_pcd(self, pcd: BasicPointCloud, spatial_lr_scale: float):
         self.spatial_lr_scale = spatial_lr_scale
         fused_point_cloud = torch.tensor(np.asarray(pcd.points)).float().cuda()
-        fused_color = RGB2SH(torch.tensor(np.asarray(pcd.colors)).float().cuda())
+        fused_color = RGB2SH(torch.tensor(np.asarray(pcd.colors / 255)).float().cuda())
         features = (
             torch.zeros((fused_color.shape[0], 3, (self.max_sh_degree + 1) ** 2))
             .float()
@@ -835,7 +836,7 @@ def normal_scene(scene):
     scene_bbox = scene.bounds
     scene_centroid = scene.centroid
     scene.vertices = scene.vertices - scene_centroid
-    scale_factor = 1 / (scene_bbox[1][1] - scene_bbox[0][0])
+    scale_factor = 1 / (scene_bbox[1][1] - scene_bbox[0][1])
     scene.vertices = scene.vertices  * np.array([scale_factor, scale_factor, scale_factor])
     return scene
 

@@ -9,10 +9,11 @@ import numpy as np
 from trimesh.transformations import rotation_matrix, transform_points
 #from trajectory import get_extrinsics,_rot_xyz
 import open3d as o3d
-from coarse_room import utils
+# from coarse_room import utils
 from random import randint
 import math
-from coarse_room.utils import vis_pc
+import utils
+#from utils import vis_pc
 
 class scene_loader:
     def __init__(self,scene_path,models_path,room_id,scene_id, output_path = '/remote-home/share/room_gen/roomPCD'):
@@ -26,7 +27,6 @@ class scene_loader:
         self.scene_id = scene_id
         self.output_path = output_path
         #当前房间的家具文件的路径
-        self.room_models_path = os.path.join(self.models_path,self.scene_id,self.room_id)
         self.parser_scene()
   
     def parser_scene(self):
@@ -53,69 +53,81 @@ class scene_loader:
         self.color_label_dict = color_label_dict
 
     def generate_scene(self):
-        scene = o3d.geometry.PointCloud()
+        scene = trimesh.Scene()
 
         # load the furnitures in the scene
-        curren_room_path = os.path.join(self.models_path,self.scene_id,self.room_id)
         for furniture in self.furniture_json:
-            if os.path.exists(os.path.join(curren_room_path, furniture['jid'], furniture['jid'] + '.obj')):
-                pcd = self.load_furtinue(furniture,curren_room_path)
-                scene.points = o3d.utility.Vector3dVector(np.concatenate([np.asarray(scene.points), np.asarray(pcd.points)]))
-                scene.colors = o3d.utility.Vector3dVector(np.concatenate([np.asarray(scene.colors), np.asarray(pcd.colors)]))
-            else:
-                raise ValueError(f"No such file or directory: {os.path.join(curren_room_path, furniture['jid'], furniture['jid'] + '.obj')}")
+            if os.path.exists(os.path.join(furniture['path'], 'point-cloud.ply')) and ('Lamp' not in furniture['category'] if furniture['category'] is not None else True):
+                print(furniture['category'])
+                pcd = self.load_furtinue(furniture)
+                scene.add_geometry(pcd)
+            # else:
+            #     raise ValueError(f"No such file or directory")
         
-        scene_bounding_box = scene.get_axis_aligned_bounding_box()
-        scene_bbox = np.vstack((scene_bounding_box.min_bound,scene_bounding_box.max_bound))
+        scene_bbox = scene.bounds
         scene_centroid = (scene_bbox[0]+scene_bbox[1])/2
         scene_len = (scene_bbox[1]-scene_bbox[0])
 
         scene_bbox_pc = utils.get_vertices(scene_bbox)
         ##Sequential order：back front top down right left
         extra_dict = {
-            '0':'wall',
-            '1':'wall',
+            '0':'wall0',
+            '1':'wall1',
             '2':'ceiling',
             '3':'floor',
-            '4':'wall',
-            '5':'wall'
+            '4':'wall2',
+            '5':'wall3'
             }
         #按照需求添加自己需要的
         for i,pcd in enumerate(scene_bbox_pc):
+
+
             semantic_color = self.update_color_dict(extra_dict[str(i)])
-            if i==3:
-                pcd = scene_bbox_pc[i]
-                pcd_colors = np.repeat(np.array(semantic_color).reshape(1,-1) /255, np.asarray(pcd.points).shape[0], axis=0)
-                pcd.colors = o3d.utility.Vector3dVector(pcd_colors)
-                scene.points = o3d.utility.Vector3dVector(np.concatenate([np.asarray(scene.points), np.asarray(pcd.points)]))
-                scene.colors = o3d.utility.Vector3dVector(np.concatenate([np.asarray(scene.colors), np.asarray(pcd.colors)]))
-    
+            pcd_colors = np.repeat(np.array(semantic_color).reshape(1,-1) /255, np.asarray(pcd.vertices).shape[0], axis=0)
+            pcd.visual.vertex_colors = pcd_colors  
+            scene.add_geometry(pcd)
         
-        points = np.asarray(scene.points)
-        points[:, [1,2]] = points[:, [2,1]]
-        scene.points = o3d.utility.Vector3dVector(points)
-        scene = self.normal_scene(scene)
-        scene_savedir = os.path.join(self.output_path,self.scene_id,self.room_id,"scene_pcd.ply")
+        point_clouds = [trimesh.points.PointCloud(geometry.vertices, colors=geometry.visual.vertex_colors) for geometry in scene.geometry.values()]
+
+        # 合并点云和颜色信息
+        merged_vertices = np.concatenate([pcd.vertices for pcd in point_clouds])
+        merged_colors = np.concatenate([pcd.visual.vertex_colors for pcd in point_clouds])
+
+        # 创建一个新的点云，包含合并后的点和颜色信息
+        merged_pcd = trimesh.points.PointCloud(merged_vertices, colors=merged_colors)
+
+        # merged_scene = self.normal_scene(merged_pcd)
+        # merged_scene.show()
+        scene_savedir = os.path.join(self.output_path,self.scene_id,self.room_id,"scene_pcd_whole_wall.ply")
         os.makedirs(os.path.dirname(scene_savedir), exist_ok=True)
         with open(self.color_label_dict_json , 'w') as f:
             json.dump(self.color_label_dict,f)
-        o3d.io.write_point_cloud(scene_savedir, scene)
-        vis_pc(scene)
+        
+        # o3d_pcd = o3d.geometry.PointCloud()
+        # o3d_pcd.points = o3d.utility.Vector3dVector(merged_pcd.vertices)
+        # o3d_pcd.colors = o3d.utility.Vector3dVector(merged_pcd.colors / 255)  # trimesh的颜色范围是0-255，而open3d的颜色范围是0-1
+
+        # # 定义体素大小
+        # voxel_size = 0.02
+
+        # # 进行体素下采样
+        # downsampled_pcd = o3d_pcd.voxel_down_sample(voxel_size)
+        merged_pcd.export(scene_savedir)
         return scene
     
     def normal_scene(self,scene):
-        points = scene.points
-        scene_bounding_box = scene.get_axis_aligned_bounding_box()
-        scene_bbox = np.vstack((scene_bounding_box.min_bound,scene_bounding_box.max_bound))
-        scale_factor = 1.0 / (scene_bbox[1][2] - scene_bbox[0][2])  #z轴是高度轴,将y轴缩放到长度为1，其他轴按比例缩放
-        scaled_points = (points - scene_bbox[0]) * np.array([scale_factor, scale_factor, -scale_factor])
+        points = scene.vertices
+        scene_bbox = scene.bounds
+
+        scale_factor = 1.0 / (scene_bbox[1][1] - scene_bbox[0][1])  #z轴是高度轴,将y轴缩放到长度为1，其他轴按比例缩放
+        scaled_points = (points - scene_bbox[0]) * np.array([scale_factor, scale_factor, scale_factor])
         
         #平移点云
         new_min = scaled_points.min(axis=0)
         new_max = scaled_points.max(axis=0)
         bottom_center = np.array([new_min[0] + new_max[0], new_min[1]+new_max[1], 2 * new_min[2]]) / 2
-        translated_points = scaled_points - bottom_center
-        scene.points = o3d.utility.Vector3dVector(translated_points)
+        scene.vertices = scene.vertices - bottom_center
+        #scene.vertices[:, [1, 2]] = scene.vertices[:, [2, 1]]  #将y轴和z轴交换
 
         return scene
 
@@ -128,27 +140,22 @@ class scene_loader:
                 color = self.color_label_dict[label]
             return color
     
-    def load_furtinue(self,furniture,curren_room_path):
-        tr_mesh = o3d.io.read_triangle_mesh(os.path.join(curren_room_path, furniture['jid'], furniture['jid'] + '.obj'))
-        points = tr_mesh.vertices
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(points)
-        pcd = pcd.voxel_down_sample(voxel_size=0.05)
-
+    def load_furtinue(self,furniture):
+        pcd = trimesh.load(os.path.join(furniture['path'], 'point-cloud.ply'))
+        pcd.vertices[:, [1, 2]] = pcd.vertices[:, [2, 1]]  #将y轴和z轴交换
         #根据模型的bbox和json里的bbox，计算缩放因子scale
-        raw_bbox = pcd.get_axis_aligned_bounding_box()
+        raw_bbox = pcd.bounds
         bbox_vertices= np.array(furniture['bbox_vertices'])
         furniture_box = np.vstack((np.min(bbox_vertices,axis=0),np.max(bbox_vertices,axis=0)))
-        scale_factors = (furniture_box[1]-furniture_box[0])/(raw_bbox.max_bound-raw_bbox.min_bound)
+        scale_factors = (furniture_box[1]-furniture_box[0])/(raw_bbox[1]-raw_bbox[0])
         
+        #创建缩放矩阵
+        S = np.eye(4)
+        S[0, 0] = scale_factors[0]
+        S[1, 1] = scale_factors[1]
+        S[2, 2] = scale_factors[2]
         # 对点云进行缩放
-        points_array = np.asarray(pcd.points)
-        points_array[:, 0] *= scale_factors[0]
-        points_array[:, 1] *= scale_factors[1]
-        points_array[:, 2] *= scale_factors[2]
-
-        # 将缩放后的坐标重新设置回点云对象
-        pcd.points = o3d.utility.Vector3dVector(points_array)
+        pcd.apply_transform(S)
 
         #旋转家具
         translation = furniture['pos']
@@ -163,22 +170,23 @@ class scene_loader:
         transform_matrix = np.eye(4)
         transform_matrix[:3, :3] = R
         transform_matrix[:3, 3] = translation
-        pcd.transform(transform_matrix)
+        pcd.apply_transform(transform_matrix)
 
         #创建语义颜色并赋给点云
-        semantic_color = self.update_color_dict(furniture['category'])
-        pcd_colors = np.repeat(np.array(semantic_color).reshape(1,-1) /255, np.asarray(pcd.points).shape[0], axis=0)
-        pcd.colors = o3d.utility.Vector3dVector(pcd_colors)
+        # semantic_color = self.update_color_dict(furniture['category'])
+        # pcd_colors = np.repeat(np.array(semantic_color).reshape(1,-1), np.asarray(pcd.vertices).shape[0], axis=0)
+        # pcd.colors = pcd_colors
+
 
         return pcd
     
 if __name__== "__main__":
     scene_path = "/remote-home/share/room_gen/3D-FRONT-parsed"
-    models_path = "/remote-home/share/room_gen/dreamGaussian_gen"
+    models_path = "/remote-home/share/room_gen/shape-output"
     scene_id = "4944051f-3a7e-4387-b5f3-f925ae6da57e"
     room_id = "LivingRoom-4719"
-    scene =scene_loader(scene_path,models_path,room_id,scene_id)
-    _ = scene.generate_scene()
     
-
-
+    scene_loader = scene_loader(scene_path,models_path,room_id,scene_id)
+    scene = scene_loader.generate_scene()
+    scene.show()
+    print()

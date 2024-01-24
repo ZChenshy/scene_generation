@@ -104,7 +104,8 @@ class RandomCameraDataModuleConfig:
     radius: float = 0.03 #相机轨迹的半径
     look_direction: str = 'outside' #相机看向的方向，inside看向圆心，outside看向圆外
     
-
+    camera_trajectory: str = 'move'
+    target_trajectory: str = 'move'
 
 class RandomCameraDataset(Dataset):
     def __init__(self, cfg: Any, split: str) -> None:
@@ -187,7 +188,7 @@ class RandomCameraDataset(Dataset):
             ###################
         
         # default camera up direction as +y
-        up: Float[Tensor, "B 3"] = torch.as_tensor([0 , -1 , 0], dtype=torch.float32)[None, :].repeat(self.cfg.batch_size, 1)
+        up: Float[Tensor, "B 3"] = torch.as_tensor([0 , -1 , 0], dtype=torch.float32)[None, :].repeat(self.n_views, 1)
         lookat: Float[Tensor, "B 3"] = F.normalize(target_points - camera_positions, dim=-1)
         right: Float[Tensor, "B 3"] = F.normalize(torch.cross(lookat, up, dim=-1), dim=-1)
 
@@ -370,8 +371,11 @@ class RandomCameraIterableDatasetCustom(IterableDataset, Updateable):
         self.batch_size: int = self.batch_sizes[0]
         self.directions_unit_focal = self.directions_unit_focals[0]
 
-        self.fix = True #该参数为true，则固定相机位置，否则不固定。
         
+        
+        ####
+        #!If new camera works, this part will be removed
+        self.fix = False #该参数为true，则固定相机位置，否则不固定。
         #使用固定的相机位置、相机焦距
         self.fix_elevation_deg = self.cfg.fix_elevation_deg
         self.fix_azimuth_deg = self.cfg.fix_azimuth_deg
@@ -383,7 +387,11 @@ class RandomCameraIterableDatasetCustom(IterableDataset, Updateable):
         self.azimuth_range = self.cfg.azimuth_range
         self.camera_distance_range = self.cfg.camera_distance_range
         self.fovy_range = self.cfg.fovy_range
-        
+        ######
+
+        #! new camera
+        self.camera_trajectory = self.cfg.camera_trajectory
+        self.target_trajectory = self.cfg.target_trajectory
 
     def update_step(self, epoch: int, global_step: int, on_load_weights: bool = False):
         size_ind = bisect.bisect_right(self.resolution_milestones, global_step) - 1
@@ -438,92 +446,97 @@ class RandomCameraIterableDatasetCustom(IterableDataset, Updateable):
         fovy = fovy_deg * math.pi / 180
 
 
-        if self.fix == True:
-            """
-            使用固定的相机位置
-            """
-            elevation_deg = torch.tensor(self.fix_elevation_deg).repeat(self.batch_size)
-            elevation = elevation_deg * math.pi / 180
-            azimuth_deg = torch.randint(low=0, high=360, size = (self.batch_size,))
-            azimuth = azimuth_deg * math.pi / 180
-            camera_distances = torch.tensor(self.fix_camera_distance).repeat(self.batch_size)
-            camera_positions = torch.stack(
-            [
-                camera_distances * torch.cos(elevation) * torch.cos(azimuth), 
-                camera_distances * torch.sin(elevation),
-                camera_distances * torch.cos(elevation) * torch.sin(azimuth),     
-            ], dim=-1)
-            center = torch.zeros_like(camera_positions)
+        # if self.fix == True:
+        #     """
+        #     使用固定的相机位置
+        #     """
+        #     elevation_deg = torch.tensor(self.fix_elevation_deg).repeat(self.batch_size)
+        #     elevation = elevation_deg * math.pi / 180
+        #     azimuth_deg = torch.randint(low=0, high=360, size = (self.batch_size,))
+        #     azimuth = azimuth_deg * math.pi / 180
+        #     camera_distances = torch.tensor(self.fix_camera_distance).repeat(self.batch_size)
+        #     camera_positions = torch.stack(
+        #     [
+        #         camera_distances * torch.cos(elevation) * torch.cos(azimuth), 
+        #         camera_distances * torch.sin(elevation),
+        #         camera_distances * torch.cos(elevation) * torch.sin(azimuth),     
+        #     ], dim=-1)
+        #     center = torch.zeros_like(camera_positions)
             
-        else:
-            elevation_deg: Float[Tensor, "B"]
-            elevation: Float[Tensor, "B"]
-            elevation_deg = (
-                torch.rand(self.batch_size)
-                * (self.elevation_range[1] - self.elevation_range[0])
-                + self.elevation_range[0]
-            )
-            elevation = elevation_deg * math.pi / 180
+        # else:
+        #     elevation_deg: Float[Tensor, "B"]
+        #     elevation: Float[Tensor, "B"]
+        #     elevation_deg = (
+        #         torch.rand(self.batch_size)
+        #         * (self.elevation_range[1] - self.elevation_range[0])
+        #         + self.elevation_range[0]
+        #     )
+        #     elevation = elevation_deg * math.pi / 180
         
             
-            azimuth_deg: Float[Tensor, "B"]
-            azimuth: Float[Tensor, "B"]
-            azimuth_deg = (
-                torch.rand(self.batch_size) + torch.arange(self.batch_size)
-            ) / self.batch_size * (
-                self.azimuth_range[1] - self.azimuth_range[0]
-            ) + self.azimuth_range[0]
-            azimuth = azimuth_deg * math.pi / 180
+        #     azimuth_deg: Float[Tensor, "B"]
+        #     azimuth: Float[Tensor, "B"]
+        #     azimuth_deg = (
+        #         torch.rand(self.batch_size) + torch.arange(self.batch_size)
+        #     ) / self.batch_size * (
+        #         self.azimuth_range[1] - self.azimuth_range[0]
+        #     ) + self.azimuth_range[0]
+        #     azimuth = azimuth_deg * math.pi / 180
 
-            camera_distances: Float[Tensor, "B"]
-            camera_distances: Float[Tensor, "B"] = (
-                torch.rand(self.batch_size)
-                * (self.camera_distance_range[1] - self.camera_distance_range[0])
-                + self.camera_distance_range[0]
-            )
+        #     camera_distances: Float[Tensor, "B"]
+        #     camera_distances: Float[Tensor, "B"] = (
+        #         torch.rand(self.batch_size)
+        #         * (self.camera_distance_range[1] - self.camera_distance_range[0])
+        #         + self.camera_distance_range[0]
+        #     )
 
 
-            #注意坐标系的不同。在这里，y 对应 up，x 对应 right，z 对应 front
-            camera_positions = torch.stack(
-                [
-                    camera_distances * torch.cos(elevation) * torch.cos(azimuth), 
-                    camera_distances * torch.sin(elevation),
-                    camera_distances * torch.cos(elevation) * torch.sin(azimuth), 
+        #     #注意坐标系的不同。在这里，y 对应 up，x 对应 right，z 对应 front
+        #     camera_positions = torch.stack(
+        #         [
+        #             camera_distances * torch.cos(elevation) * torch.cos(azimuth), 
+        #             camera_distances * torch.sin(elevation),
+        #             camera_distances * torch.cos(elevation) * torch.sin(azimuth), 
                     
-                ],
-                dim=-1,
-            )
+        #         ],
+        #         dim=-1,
+        #     )
 
-            # default scene center at origin
-            # 默认初始场景中心放置在原点
-            # 场景的长宽高，把高标准化到[0,1]
-            center: Float[Tensor, "B 3"] = torch.zeros_like(camera_positions)
-            # sample camera perturbations from a uniform distribution [-camera_perturb, camera_perturb]
-            camera_perturb: Float[Tensor, "B 3"] = (
-                torch.rand(self.batch_size, 3) * 2 * self.cfg.camera_perturb
-                - self.cfg.camera_perturb
-            )
-            camera_positions = camera_positions + camera_perturb
+        #     # default scene center at origin
+        #     # 默认初始场景中心放置在原点
+        #     # 场景的长宽高，把高标准化到[0,1]
+        #     center: Float[Tensor, "B 3"] = torch.zeros_like(camera_positions)
+        #     # sample camera perturbations from a uniform distribution [-camera_perturb, camera_perturb]
+        #     camera_perturb: Float[Tensor, "B 3"] = (
+        #         torch.rand(self.batch_size, 3) * 2 * self.cfg.camera_perturb
+        #         - self.cfg.camera_perturb
+        #     )
+        #     camera_positions = camera_positions + camera_perturb
 
 
-        #生成相机的观察目标
-            #target = center + [dx_dis * x_sign, dy_dis, dz_dis* z_sign]
-            #dx_dis 与 dy_dis使用正态分布采样，取值范围在[0, 2]
-            #dz_dis 采取均匀分布采样，取值范围在[0, 0.4]
-            #x_sign, z_sign 根据 旋转角度来确定象限符号
-            #根据需求手动设定dx_dis, dy_dis, dz_dis的大小，以此来调节相机仰角。
-            #具体来说，dz_dis越大，相机仰角就越大。
-        target_points: Float[Tensor, "B 3"] = center.clone()
+        # #生成相机的观察目标
+        #     #target = center + [dx_dis * x_sign, dy_dis, dz_dis* z_sign]
+        #     #dx_dis 与 dy_dis使用正态分布采样，取值范围在[0, 2]
+        #     #dz_dis 采取均匀分布采样，取值范围在[0, 0.4]
+        #     #x_sign, z_sign 根据 旋转角度来确定象限符号
+        #     #根据需求手动设定dx_dis, dy_dis, dz_dis的大小，以此来调节相机仰角。
+        #     #具体来说，dz_dis越大，相机仰角就越大。
+        # target_points: Float[Tensor, "B 3"] = center.clone()
 
-        for i in range(self.batch_size):
-            angle = torch.rand(1) * (2 * math.pi)
-            dx_dis = torch.rand(1) * 0.15 * math.cos(angle)
-            dy_dis = torch.rand(1) * 0.15 * math.sin(angle)
-            dz_dis = torch.rand(1) * 0.15
-            target_points[i, :] = target_points[i, :] + torch.tensor([dx_dis, dy_dis, dz_dis])
+        # for i in range(self.batch_size):
+        #     angle = torch.rand(1) * (2 * math.pi)
+        #     dx_dis = torch.rand(1) * 0.15 * math.cos(angle)
+        #     dy_dis = torch.rand(1) * 0.15 * math.sin(angle)
+        #     dz_dis = torch.rand(1) * 0.15
+        #     target_points[i, :] = target_points[i, :] + torch.tensor([dx_dis, dy_dis, dz_dis])
         
         # default camera up direction as +z
         # 如果实际渲染结果，画面是颠倒的，可以把up向量[0,0,1]调节为[0,0,-1]
+        camera_positions = trajectory(self.batch_size, mode = self.camera_trajectory, 
+                                      trajectory = 'circle', center= [0., 0.1, 0.], radius = 0.1)
+        target_points = trajectory(self.batch_size, mode = self.target_trajectory, 
+                                   trajectory = 'circle', center= [0., 0.05, 0.], radius = 0.3)
+        target_pertub = (torch.rand(self.batch_size, 3) * 2 * torch.tensor([0.1, 0.1, 0.1]))
         up: Float[Tensor, "B 3"] = torch.as_tensor([0 , -1 , 0], dtype=torch.float32)[
             None, :
         ].repeat(self.batch_size, 1)
@@ -629,9 +642,9 @@ class RandomCameraIterableDatasetCustom(IterableDataset, Updateable):
             "c2w": c2w,
             "w2c": w2c,
             "light_positions": light_positions,
-            "elevation": elevation_deg,
-            "azimuth": azimuth_deg,
-            "camera_distances": camera_distances,
+            "elevation": torch.tensor([0., 0., 0.]),
+            "azimuth": torch.tensor([0., 0., 0.]),
+            "camera_distances": torch.tensor([0., 0., 0.]),
             "height": self.height,
             "width": self.width,
             "fovy": self.fovy,
@@ -662,3 +675,39 @@ def look_at(campos,target):
     w2c[:3, 3] = R @ (-campos)
     return w2c
     
+
+def trajectory(samPoint_num, mode = "move", **kwargs):
+    """
+    samPoint_num: the number of sample point
+    mode:"move", "fix". 
+        In move mode, the positions(cameras positions or target positions) are not fixed. 
+        You should offer the trajectory's center coordinate, trajectory's shpae(circle, ellipse or others).
+        The extra paras would be contained of kwargs. If trajectory is circle, the paras contained circle's center,
+        the circle's radius; If trajectory is ellipse, the paras should contained ellipse's center, the major axis's 
+        and minor axis's length. To Do : More flesible trajectory
+
+        In fix mode, the positions(cameras positions or target positions) is fixed. You should offer
+        the fixed position's coordinate.
+    """
+    paras = kwargs
+    if mode == "move":
+        if paras.get('trajectory') == 'circle':
+            center = paras.get('center')
+            radius = paras.get('radius')
+            rotation = torch.rand(samPoint_num) * 360.0
+            center = torch.tensor(center).repeat(samPoint_num, 1)
+            display = torch.stack([torch.cos(rotation * math.pi / 180.0) * radius, torch.zeros_like(rotation), torch.sin(rotation * math.pi / 180.0) * radius], dim=1)
+            points = display + center
+            
+        elif paras.get('trajectory') == 'ellipse':
+            pass #! To Do
+        else:
+            pass #! To Do
+    elif mode == 'fix':
+        fixed_position = paras.get('fixed_position')
+        points = torch.tensor(fixed_position).repeat(samPoint_num, 1)
+        
+    else:
+        pass #! To Do
+
+    return points

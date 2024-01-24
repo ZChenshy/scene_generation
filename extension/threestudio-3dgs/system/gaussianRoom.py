@@ -86,8 +86,8 @@ class GaussianRoom(BaseLift3DSystem):
         # os.makedirs("./test_result", exist_ok=True)
         # rgb = PIL.Image.fromarray((guidance_inp[0].cpu().detach().numpy() * 255).astype(np.uint8), "RGB")
         # img = (guidance_inp[0].cpu().detach().numpy() * 255).astype(np.uint8)
-        # plt.imshow(img)
-        # plt.show()
+        # # plt.imshow(img)
+        # # plt.show()
         # rgb.save(f"./test_result/guidance_inp_{self.true_global_step}.png")
         
         # depth = (guidance_cond[0] - depth_min) / (depth_max - depth_min) 
