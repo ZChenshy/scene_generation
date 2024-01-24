@@ -65,6 +65,8 @@ class GaussianRoom(BaseLift3DSystem):
         
     def on_fit_start(self) -> None:
         super().on_fit_start()
+        save_path = self.get_save_path(f"point_cloud_it{self.global_step}.ply")
+        self.geometry.save_ply(save_path)
         
         
     def training_step(self, batch, batch_idx):
@@ -208,7 +210,8 @@ class GaussianRoom(BaseLift3DSystem):
             name="validation_step",
             step=self.global_step,
         )
-    
+        save_path = self.get_save_path(f"point_cloud_it{self.global_step}.ply")
+        self.geometry.save_ply(save_path)    
     
     def on_validation_epoch_end(self):
         pass

@@ -41,8 +41,8 @@ system:
     feature_lr: 0.01
     opacity_lr: 0.05
     rotation_lr: 0.001
-    densification_interval: 100
-    prune_interval: 100
+    densification_interval: 300
+    prune_interval: 300
     opacity_reset_interval: 50000000
     densify_from_iter: 500
     densify_until_iter: ${trainer.max_steps}
@@ -101,9 +101,9 @@ system:
     lambda_sds: 1.0
     lambda_position: 0.0001
     lambda_opacity: 0.1
-    lambda_scales: 0.001
+    lambda_scales: 0.01
     lambda_tv_loss: 1.0
-    lambda_depth_tv_loss: 0.0 # original 1.0
+    lambda_depth_tv_loss: 1.0 # original 1.0
 
 
 trainer:
