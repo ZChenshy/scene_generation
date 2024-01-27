@@ -3,17 +3,13 @@ import os
 import numpy as np
 from PIL import Image
 
-from transformers import DPTFeatureExtractor, DPTForDepthEstimation
+from transformers import DPTImageProcessor, DPTForDepthEstimation
 from diffusers import ControlNetModel, StableDiffusionXLControlNetPipeline, AutoencoderKL, StableDiffusionXLPipeline, StableDiffusionPipeline
 from diffusers.utils import load_image
 from torchvision.transforms import ToTensor
-controlnet_pretrained_path = "/remote-home/share/Models/diffusers/controlnet-depth-sdxl-1.0"
-sdxl_pretrained_path = "/remote-home/share/Models/stabilityai/stable-diffusion-xl-base-1.0"
-vae_pretrained_path = "/remote-home/share/Models/madebyollin/sdxl-vae-fp16-fix"
 
 
-depth_estimator = DPTForDepthEstimation.from_pretrained("Intel/dpt-hybrid-midas").to("cuda")
-feature_extractor = DPTFeatureExtractor.from_pretrained("Intel/dpt-hybrid-midas")
+
 def load_model():
     print("[INFO] Loading controlnet")
     controlnet = ControlNetModel.from_pretrained(
@@ -34,6 +30,7 @@ def load_model():
     ).to("cuda")
     print("[INFO] Loaded sdxl")
     pipe.enable_model_cpu_offload()
+    torch.cuda.empty_cache()
     return pipe
 
 def get_depth_map(image):
@@ -61,6 +58,12 @@ seed = 978364352
 prompt = "A DSLR photo of partial view of a modern style living room, photorealistic"
 controlnet_conditioning_scale = 0.55  # recommended for good generalization
 
+controlnet_pretrained_path = "/remote-home/share/Models/diffusers/controlnet-depth-sdxl-1.0"
+sdxl_pretrained_path = "/remote-home/share/Models/stabilityai/stable-diffusion-xl-base-1.0"
+vae_pretrained_path = "/remote-home/share/Models/madebyollin/sdxl-vae-fp16-fix"
+
+depth_estimator = DPTForDepthEstimation.from_pretrained("Intel/dpt-hybrid-midas").to("cuda")
+feature_extractor = DPTImageProcessor.from_pretrained("Intel/dpt-hybrid-midas")
 
 depth_dir = "/remote-home/hzp/scene_generation/outputs/gaussiandroom-sd/test@20240126-053353/save/depth"
 rendered_dir = "/remote-home/hzp/scene_generation/outputs/gaussiandroom-sd/test@20240126-053353/save/rendered"
@@ -85,13 +88,16 @@ for img_name in render_img_list:
         rendered_image = Image.open(fp=os.path.join(rendered_dir, img_name))
         
         depth_image = get_depth_map(image=rendered_image)
-        depth_image.save(os.path.join(estimate_dir, f"{img_name[:2]}_estimate_depth.png")) #
+        # depth_image.save(os.path.join(estimate_dir, f"{img_name[:2]}_estimate_depth.png")) #
+        
         
         generator = torch.Generator("cuda").manual_seed(seed)
         images = pipe(
-            prompt, image=depth_image, num_inference_steps=30, controlnet_conditioning_scale=controlnet_conditioning_scale, generator=generator
-        ).images
-        images[0].save( os.path.join(save_dir, f"{img_name[:2]}_seed{seed}.png") )
+            prompt, image=depth_image, num_inference_steps=30, controlnet_conditioning_scale=controlnet_conditioning_scale, generator=generator, return_dict=True, 
+            output_type="np"
+        )
+        # images[0].save( os.path.join(save_dir, f"{img_name[:2]}_seed{seed}.png") )
+        print('done time')
         
 
 
