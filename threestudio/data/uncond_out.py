@@ -533,7 +533,7 @@ class RandomCameraIterableDatasetCustom(IterableDataset, Updateable):
         # default camera up direction as +z
         # 如果实际渲染结果，画面是颠倒的，可以把up向量[0,0,1]调节为[0,0,-1]
         camera_positions = trajectory(self.batch_size, mode = self.camera_trajectory, 
-                                      trajectory = 'circle', center= [0., 0.1, 0.], radius = 0.1)
+                                      trajectory = 'circle', center= [0., 0.15, 0.], radius = 0.1)
         target_points = trajectory(self.batch_size, mode = self.target_trajectory, 
                                    trajectory = 'circle', center= [0., 0.05, 0.], radius = 0.3)
         target_pertub = (torch.rand(self.batch_size, 3) * 2 * torch.tensor([0.1, 0.1, 0.1]))
