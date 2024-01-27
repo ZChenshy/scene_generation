@@ -7,28 +7,34 @@ from transformers import DPTFeatureExtractor, DPTForDepthEstimation
 from diffusers import ControlNetModel, StableDiffusionXLControlNetPipeline, AutoencoderKL, StableDiffusionXLPipeline, StableDiffusionPipeline
 from diffusers.utils import load_image
 from torchvision.transforms import ToTensor
-controlnet_pretrained_path = "/remote-home/share/room_gen/Models/diffusers/controlnet-depth-sdxl-1.0"
-sdxl_pretrained_path = "/remote-home/share/room_gen/Models/stabilityai/stable-diffusion-xl-base-0.9"
-vae_pretrained_path = "/remote-home/share/room_gen/Models/madebyollin/sdxl-vae-fp16-fix"
-save_path = f"/remote-home/hzp/test/sdxl_0.9_depth/{controlnet_pretrained_path.split('/')[-1]}"
-os.makedirs(save_path, exist_ok=True)
+controlnet_pretrained_path = "/remote-home/share/Models/diffusers/controlnet-depth-sdxl-1.0"
+sdxl_pretrained_path = "/remote-home/share/Models/stabilityai/stable-diffusion-xl-base-1.0"
+vae_pretrained_path = "/remote-home/share/Models/madebyollin/sdxl-vae-fp16-fix"
 
 
 depth_estimator = DPTForDepthEstimation.from_pretrained("Intel/dpt-hybrid-midas").to("cuda")
 feature_extractor = DPTFeatureExtractor.from_pretrained("Intel/dpt-hybrid-midas")
-controlnet = ControlNetModel.from_pretrained(
-    controlnet_pretrained_path,
-    use_safetensors=True,
-    torch_dtype=torch.float16,
-).to("cuda")
-vae = AutoencoderKL.from_pretrained(vae_pretrained_path, torch_dtype=torch.float16).to("cuda")
-pipe = StableDiffusionXLControlNetPipeline.from_pretrained(
-    sdxl_pretrained_path,
-    controlnet=controlnet,
-    vae=vae,
-    torch_dtype=torch.float16,
-).to("cuda")
-pipe.enable_model_cpu_offload()
+def load_model():
+    print("[INFO] Loading controlnet")
+    controlnet = ControlNetModel.from_pretrained(
+        controlnet_pretrained_path,
+        use_safetensors=True,
+        torch_dtype=torch.float16,
+    ).to("cuda")
+
+    print("[INFO] Loading vae")
+    vae = AutoencoderKL.from_pretrained(vae_pretrained_path, torch_dtype=torch.float16).to("cuda")
+
+    print("[INFO] Loading sdxl")
+    pipe = StableDiffusionXLControlNetPipeline.from_pretrained(
+        sdxl_pretrained_path,
+        controlnet=controlnet,
+        vae=vae,
+        torch_dtype=torch.float16,
+    ).to("cuda")
+    print("[INFO] Loaded sdxl")
+    pipe.enable_model_cpu_offload()
+    return pipe
 
 def get_depth_map(image):
     image = feature_extractor(images=image, return_tensors="pt").pixel_values.to("cuda")
@@ -52,23 +58,40 @@ def get_depth_map(image):
 
 
 seed = 978364352
-prompt = "stormtrooper lecture, photorealistic"
-# prompt = "A DSLR photo of a chinese style living room, photorealistic"
-image = load_image("https://huggingface.co/lllyasviel/sd-controlnet-depth/resolve/main/images/stormtrooper.png")
+prompt = "A DSLR photo of partial view of a modern style living room, photorealistic"
 controlnet_conditioning_scale = 0.55  # recommended for good generalization
 
-# depth_image = Image.open("/remote-home/hzp/test/sdxl_depth/controlnet-depth-sdxl-1.0-mid/A_DSLR_photo_of_a_chinese_style_living_room,_floor_view_depth.png")
-depth_image = get_depth_map(image)
 
-depth_image = depth_image.resize((1024, 1024))
-depth_image.save(os.path.join(save_path, f"{prompt.replace(' ', '_')}_depth.png"))
+depth_dir = "/remote-home/hzp/scene_generation/outputs/gaussiandroom-sd/test@20240126-053353/save/depth"
+rendered_dir = "/remote-home/hzp/scene_generation/outputs/gaussiandroom-sd/test@20240126-053353/save/rendered"
 
-depth_np = np.array(depth_image)
-print(depth_np.shape, depth_np.min(), depth_np.max())
-generator = torch.Generator("cuda").manual_seed(seed)
-images = pipe(
-    prompt, image=depth_image, num_inference_steps=30, controlnet_conditioning_scale=controlnet_conditioning_scale, generator=generator
-).images
-images[0]
+save_dir = os.path.join(depth_dir[:-5], controlnet_pretrained_path.split('/')[-1], f"estimateDepth_con-{controlnet_conditioning_scale}_seed-{seed}")
+if not os.path.exists(save_dir):
+    os.makedirs(save_dir, exist_ok=True)
+    
+estimate_dir = os.path.join(depth_dir[:-5], "estimate")
+if not os.path.exists(estimate_dir):
+    os.makedirs(estimate_dir, exist_ok=True)
+    
+depth_img_list = os.listdir(depth_dir)
+render_img_list = os.listdir(rendered_dir)
 
-images[0].save(os.path.join(save_path, f"{prompt.replace(' ', '_')}_sdxl_gen_con{controlnet_conditioning_scale}_seed{seed}.png"))
+pipe = load_model()
+# for img_name in depth_img_list:
+for img_name in render_img_list:
+    if '.png' in img_name:
+        # depth_image = Image.open(fp=os.path.join(depth_dir, img_name))
+        # depth_image = depth_image.resize((1024, 1024))
+        rendered_image = Image.open(fp=os.path.join(rendered_dir, img_name))
+        
+        depth_image = get_depth_map(image=rendered_image)
+        depth_image.save(os.path.join(estimate_dir, f"{img_name[:2]}_estimate_depth.png")) #
+        
+        generator = torch.Generator("cuda").manual_seed(seed)
+        images = pipe(
+            prompt, image=depth_image, num_inference_steps=30, controlnet_conditioning_scale=controlnet_conditioning_scale, generator=generator
+        ).images
+        images[0].save( os.path.join(save_dir, f"{img_name[:2]}_seed{seed}.png") )
+        
+
+
