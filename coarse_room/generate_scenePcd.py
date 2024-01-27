@@ -8,7 +8,6 @@ from PIL import Image
 import numpy as np
 from trimesh.transformations import rotation_matrix, transform_points
 #from trajectory import get_extrinsics,_rot_xyz
-import open3d as o3d
 # from coarse_room import utils
 from random import randint
 import math
@@ -40,7 +39,7 @@ class scene_loader:
                 self.room_json = room_json
                 self.furniture_json = room_json['room_furnitures']
         
-        #加载color 2 label
+        #加载color 2 label # TODO: remove color dict
         self.color_label_dict_json = os.path.join(self.output_path,'color_label_dict.json')
         os.makedirs(self.output_path, exist_ok=True)
         if not os.path.exists(self.color_label_dict_json):
@@ -79,7 +78,7 @@ class scene_loader:
             '5':'wall3'
             }
         #按照需求添加自己需要的
-        for i,pcd in enumerate(scene_bbox_pc):
+        for i, pcd in enumerate(scene_bbox_pc):
 
 
             semantic_color = self.update_color_dict(extra_dict[str(i)])
@@ -98,7 +97,7 @@ class scene_loader:
 
         # merged_scene = self.normal_scene(merged_pcd)
         # merged_scene.show()
-        scene_savedir = os.path.join(self.output_path,self.scene_id,self.room_id,"scene_pcd_whole_wall.ply")
+        scene_savedir = os.path.join(self.output_path, self.scene_id, self.room_id, "scene_pcd_whole_wall.ply")
         os.makedirs(os.path.dirname(scene_savedir), exist_ok=True)
         with open(self.color_label_dict_json , 'w') as f:
             json.dump(self.color_label_dict,f)
@@ -115,22 +114,6 @@ class scene_loader:
         merged_pcd.export(scene_savedir)
         return scene
     
-    def normal_scene(self,scene):
-        points = scene.vertices
-        scene_bbox = scene.bounds
-
-        scale_factor = 1.0 / (scene_bbox[1][1] - scene_bbox[0][1])  #z轴是高度轴,将y轴缩放到长度为1，其他轴按比例缩放
-        scaled_points = (points - scene_bbox[0]) * np.array([scale_factor, scale_factor, scale_factor])
-        
-        #平移点云
-        new_min = scaled_points.min(axis=0)
-        new_max = scaled_points.max(axis=0)
-        bottom_center = np.array([new_min[0] + new_max[0], new_min[1]+new_max[1], 2 * new_min[2]]) / 2
-        scene.vertices = scene.vertices - bottom_center
-        #scene.vertices[:, [1, 2]] = scene.vertices[:, [2, 1]]  #将y轴和z轴交换
-
-        return scene
-
     def update_color_dict(self,label):
         #This function is used to check whether the label has a color. If not, it will be added to the dictionary
             if label not in self.color_label_dict:
@@ -177,7 +160,6 @@ class scene_loader:
         # pcd_colors = np.repeat(np.array(semantic_color).reshape(1,-1), np.asarray(pcd.vertices).shape[0], axis=0)
         # pcd.colors = pcd_colors
 
-
         return pcd
     
 if __name__== "__main__":
@@ -186,7 +168,7 @@ if __name__== "__main__":
     scene_id = "4944051f-3a7e-4387-b5f3-f925ae6da57e"
     room_id = "LivingRoom-4719"
     
-    scene_loader = scene_loader(scene_path,models_path,room_id,scene_id)
+    scene_loader = scene_loader(scene_path, models_path,room_id,scene_id)
     scene = scene_loader.generate_scene()
     scene.show()
     print()
