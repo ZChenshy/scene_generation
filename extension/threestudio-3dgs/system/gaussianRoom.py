@@ -2,15 +2,14 @@ from dataclasses import dataclass
 
 import numpy as np
 import torch
-import PIL
+from PIL import Image
+import torchvision.transforms as transforms
 import threestudio
 from threestudio.systems.base import BaseLift3DSystem
 from threestudio.systems.utils import parse_optimizer
-from threestudio.utils.loss import tv_loss
+from threestudio.utils.loss import ssim, tv_loss, l1_loss
 from threestudio.utils.typing import *
-import os
-import matplotlib.pyplot as plt
-from ..geometry.gaussian_base import BasicPointCloud, Camera
+from ..geometry.gaussian_base import BasicPointCloud
 
 
 @threestudio.register("gaussianRoom-system")
@@ -31,6 +30,7 @@ class GaussianRoom(BaseLift3DSystem):
             self.cfg.prompt_processor
         )
         self.prompt_utils = self.prompt_processor()
+        self.transform = transforms.ToTensor()
         
         
     def on_fit_start(self) -> None:
@@ -76,37 +76,38 @@ class GaussianRoom(BaseLift3DSystem):
 
         visibility_filter = out["visibility_filter"]
         radii = out["radii"]
-        guidance_inp = out["comp_rgb"]  # BHWC, c=3, [0, 1]
-        guidance_cond = out["comp_depth"] # BHWC, c=1, not normalized
+        guidance_inp = out["comp_rgb"].squeeze()  # HWC, c=3, [0, 1]
+        guidance_cond = out["comp_depth"].squeeze() # HWC, c=1, not normalized
         viewspace_point_tensor = out["viewspace_points"]
         
-        #! >>> For Debug >>>
-        # rgb_max = torch.max(guidance_inp[0])
-        # rgb_min = torch.min(guidance_inp[0])
-        # depth_max = torch.max(guidance_cond[0])
-        # depth_min = torch.min(guidance_cond[0])
-        # os.makedirs("./test_result", exist_ok=True)
-        # rgb = PIL.Image.fromarray((guidance_inp[0].cpu().detach().numpy() * 255).astype(np.uint8), "RGB")
-        # img = (guidance_inp[0].cpu().detach().numpy() * 255).astype(np.uint8)
-        # # plt.imshow(img)
-        # # plt.show()
-        # rgb.save(f"./test_result/guidance_inp_{self.true_global_step}.png")
+        self.save_camera(f"camera/{self.true_global_step}-camera.pkl", batch)
+
+        self.save_rgb_image(
+            f"rendered/{self.true_global_step}-rgb.png",
+            img=guidance_inp,
+            data_format="HWC",
+        )
         
-        # depth = (guidance_cond[0] - depth_min) / (depth_max - depth_min) 
-        # depth_array = depth.cpu().detach().numpy().squeeze()
-        # depth_array = (depth_array * 255).astype(np.uint8)
-        # depth = PIL.Image.fromarray(depth_array, "L")
-        # depth.save(f"./test_result/guidance_cond_{self.true_global_step}.png")
+        self.save_colorized_depth(
+            f"depth/{self.true_global_step}-depth.png", 
+            guidance_cond,
+        )
         #! <<< Debug <<<
         
-        guidance_out = self.guidance(
-            rgb=guidance_inp, image_cond=guidance_cond, 
-            prompt_utils=self.prompt_utils, 
-            **batch, rgb_as_latents=False
-        )
-
-        loss_sds = 0.0
-        loss = 0.0
+        # guidance_out = self.guidance(
+        #     rgb=guidance_inp, image_cond=guidance_cond, 
+        #     prompt_utils=self.prompt_utils, 
+        #/     **batch, rgb_as_latents=False
+        # )
+        guidance_inp = guidance_inp.permute(2, 0, 1) # CHW c=3 [0, 1]
+        gt_image = Image.open("/remote-home/hzp/scene_generation/outputs/gaussiandroom-sd/test@20240126-053353/save/controlnet-depth-sdxl-1.0/estimateDepth_con-0.55_seed-978364352/7-_seed978364352.png").resize((512, 512))
+        gt_image = self.transform(gt_image).to(self.device) # CHW c=3 [0, 1]
+        
+        L1_loss = l1_loss(guidance_inp, gt_image)
+        loss = (1.0 - 0.2) * L1_loss + 0.2 * (1.0 - ssim(guidance_inp, gt_image))
+        
+        # loss_sds = 0.0
+        # loss = 0.0
         
         self.log(
             "gauss_num",
@@ -117,56 +118,57 @@ class GaussianRoom(BaseLift3DSystem):
             logger=True,
         )
         
-        for name, value in guidance_out.items():
-            self.log(f"train/{name}", value)
-            if name.startswith("loss_"):
-                loss_sds += value * self.C(
-                    self.cfg.loss[name.replace("loss_", "lambda_")]
-                )
+        # for name, value in guidance_out.items():
+        #     self.log(f"train/{name}", value)
+        #     if name.startswith("loss_"):
+        #         loss_sds += value * self.C(
+        #             self.cfg.loss[name.replace("loss_", "lambda_")]
+        #         )
                 
-        xyz_mean = None
-        if self.cfg.loss["lambda_position"] > 0.0:
-            xyz_mean = self.geometry.get_xyz.norm(dim=-1)
-            loss_position = xyz_mean.mean()
-            self.log(f"train/loss_position", loss_position)
-            loss += self.C(self.cfg.loss["lambda_position"]) * loss_position
+        # xyz_mean = None
+        # if self.cfg.loss["lambda_position"] > 0.0:
+        #     xyz_mean = self.geometry.get_xyz.norm(dim=-1)
+        #     loss_position = xyz_mean.mean()
+        #     self.log(f"train/loss_position", loss_position)
+        #     loss += self.C(self.cfg.loss["lambda_position"]) * loss_position
 
-        if self.cfg.loss["lambda_opacity"] > 0.0:
-            scaling = self.geometry.get_scaling.norm(dim=-1)
-            loss_opacity = (
-                scaling.detach().unsqueeze(-1) * self.geometry.get_opacity
-            ).sum()
-            self.log(f"train/loss_opacity", loss_opacity)
-            loss += self.C(self.cfg.loss["lambda_opacity"]) * loss_opacity
+        # if self.cfg.loss["lambda_opacity"] > 0.0:
+        #     scaling = self.geometry.get_scaling.norm(dim=-1)
+        #     loss_opacity = (
+        #         scaling.detach().unsqueeze(-1) * self.geometry.get_opacity
+        #     ).sum()
+        #     self.log(f"train/loss_opacity", loss_opacity)
+        #     loss += self.C(self.cfg.loss["lambda_opacity"]) * loss_opacity
 
-        if self.cfg.loss["lambda_scales"] > 0.0:
-            scale_sum = torch.sum(self.geometry.get_scaling)
-            self.log(f"train/scales", scale_sum)
-            loss += self.C(self.cfg.loss["lambda_scales"]) * scale_sum
+        # if self.cfg.loss["lambda_scales"] > 0.0:
+        #     scale_sum = torch.sum(self.geometry.get_scaling)
+        #     self.log(f"train/scales", scale_sum)
+        #     loss += self.C(self.cfg.loss["lambda_scales"]) * scale_sum
 
-        if self.cfg.loss["lambda_tv_loss"] > 0.0:
-            loss_tv = self.C(self.cfg.loss["lambda_tv_loss"]) * tv_loss(
-                out["comp_rgb"].permute(0, 3, 1, 2)
-            )
-            self.log(f"train/loss_tv", loss_tv)
-            loss += loss_tv
+        # if self.cfg.loss["lambda_tv_loss"] > 0.0:
+        #     loss_tv = self.C(self.cfg.loss["lambda_tv_loss"]) * tv_loss(
+        #         out["comp_rgb"].permute(0, 3, 1, 2)
+        #     )
+        #     self.log(f"train/loss_tv", loss_tv)
+        #     loss += loss_tv
             
-        if (
-            out.__contains__("comp_depth")
-            and self.cfg.loss["lambda_depth_tv_loss"] > 0.0
-        ):
-            loss_depth_tv = self.C(self.cfg.loss["lambda_depth_tv_loss"]) * (
-                # tv_loss(out["comp_normal"].permute(0, 3, 1, 2)) # ! 这里的comp_normal是怎么得到的
-                tv_loss(out["comp_depth"].permute(0, 3, 1, 2))
-            )
-            self.log(f"train/loss_depth_tv", loss_depth_tv)
-            loss += loss_depth_tv
+        # if (
+        #     out.__contains__("comp_depth")
+        #     and self.cfg.loss["lambda_depth_tv_loss"] > 0.0
+        # ):
+        #     loss_depth_tv = self.C(self.cfg.loss["lambda_depth_tv_loss"]) * (
+        #         # tv_loss(out["comp_normal"].permute(0, 3, 1, 2)) # ! 这里的comp_normal是怎么得到的
+        #         tv_loss(out["comp_depth"].permute(0, 3, 1, 2))
+        #     )
+        #     self.log(f"train/loss_depth_tv", loss_depth_tv)
+        #     loss += loss_depth_tv
 
-        for name, value in self.cfg.loss.items():
-            self.log(f"train_params/{name}", self.C(value))
+        # for name, value in self.cfg.loss.items():
+        #     self.log(f"train_params/{name}", self.C(value))
             
             
-        loss_sds.backward(retain_graph=True)
+        # loss_sds.backward(retain_graph=True)
+        loss.backward(retain_graph=True)
         
         iteration = self.global_step
         self.geometry.update_states(
@@ -176,12 +178,13 @@ class GaussianRoom(BaseLift3DSystem):
             viewspace_point_tensor,
         )
         
-        if loss > 0:
-            loss.backward()
+        # if loss > 0:
+        #     loss.backward()
         opt.step()
         opt.zero_grad(set_to_none=True)
 
-        return {"loss": loss_sds}
+        # return {"loss": loss_sds}
+        return {"loss": loss}
             
     
     def validation_step(self, batch, batch_idx):
@@ -210,8 +213,9 @@ class GaussianRoom(BaseLift3DSystem):
             name="validation_step",
             step=self.global_step,
         )
-        save_path = self.get_save_path(f"point_cloud_it{self.global_step}.ply")
-        self.geometry.save_ply(save_path)    
+        #// 每次Evaluation都保存点云
+        #// save_path = self.get_save_path(f"point_cloud_it{self.global_step}.ply")
+        #// self.geometry.save_ply(save_path)    
     
     def on_validation_epoch_end(self):
         pass
