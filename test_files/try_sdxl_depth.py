@@ -8,7 +8,12 @@ from diffusers import ControlNetModel, StableDiffusionXLControlNetPipeline, Auto
 from diffusers.utils import load_image
 from torchvision.transforms import ToTensor
 
+controlnet_pretrained_path = "/remote-home/share/Models/diffusers/controlnet-depth-sdxl-1.0"
+sdxl_pretrained_path = "/remote-home/share/Models/stabilityai/stable-diffusion-xl-base-1.0"
+vae_pretrained_path = "/remote-home/share/Models/madebyollin/sdxl-vae-fp16-fix"
 
+depth_estimator = DPTForDepthEstimation.from_pretrained("Intel/dpt-hybrid-midas").to("cuda")
+feature_extractor = DPTImageProcessor.from_pretrained("Intel/dpt-hybrid-midas")
 
 def load_model():
     print("[INFO] Loading controlnet")
@@ -58,12 +63,6 @@ seed = 978364352
 prompt = "A DSLR photo of partial view of a modern style living room, photorealistic"
 controlnet_conditioning_scale = 0.55  # recommended for good generalization
 
-controlnet_pretrained_path = "/remote-home/share/Models/diffusers/controlnet-depth-sdxl-1.0"
-sdxl_pretrained_path = "/remote-home/share/Models/stabilityai/stable-diffusion-xl-base-1.0"
-vae_pretrained_path = "/remote-home/share/Models/madebyollin/sdxl-vae-fp16-fix"
-
-depth_estimator = DPTForDepthEstimation.from_pretrained("Intel/dpt-hybrid-midas").to("cuda")
-feature_extractor = DPTImageProcessor.from_pretrained("Intel/dpt-hybrid-midas")
 
 depth_dir = "/remote-home/hzp/scene_generation/outputs/gaussiandroom-sd/test@20240126-053353/save/depth"
 rendered_dir = "/remote-home/hzp/scene_generation/outputs/gaussiandroom-sd/test@20240126-053353/save/rendered"
