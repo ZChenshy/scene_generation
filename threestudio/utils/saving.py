@@ -7,6 +7,8 @@ import cv2
 import imageio
 import matplotlib.pyplot as plt
 import numpy as np
+import pickle
+from regex import F
 import torch
 import trimesh
 import wandb
@@ -176,6 +178,76 @@ class SaverMixin:
         cv2.imwrite(save_path, img)
         return save_path
 
+
+    def get_colorized_depth_image_(self, img, vmin=None, vmax=None, cmap='jet', invalid_val=-99, invalid_mask=None,):
+        """Converts a depth map to a color image. """
+        
+        img = self.convert_data(img)
+        
+        dmin, dmax = 1e8, -1e8
+        img = -(img * (img > 0)).squeeze()
+        dmin_local = img.min().item()
+        dmax_local = img.max().item()
+        
+        if dmin_local < dmin:
+            dmin = dmin_local
+        if dmax_local > dmax:
+            dmax = dmax_local
+
+        img = img.squeeze()
+        if invalid_mask is None:
+            invalid_mask = img == invalid_val
+        mask = np.logical_not(invalid_mask)
+
+        # normalize
+        vmin = np.percentile(img[mask],2) if vmin is None else vmin
+        vmax = np.percentile(img[mask],98) if vmax is None else vmax
+        if vmin != vmax:
+            img = (img - vmin) / (vmax - vmin)  # vmin..vmax
+        else:
+            # Avoid 0-division
+            img = img * 0.
+
+        img[invalid_mask] = np.nan
+        
+        assert cmap in [None, "jet"]
+        if cmap == None:
+            img = (img * 255.0).astype(np.uint8)
+            img = np.repeat(img[..., None], 3, axis=2)
+        elif cmap == "jet":
+            img = (img * 255.0).astype(np.uint8)
+            img = cv2.applyColorMap(img, cv2.COLORMAP_JET)
+        
+        return img
+
+    def _save_colorized_depth(
+        self,
+        filename,
+        img,
+        cmap,
+        name: Optional[str] = None,
+        step: Optional[int] = None,
+    ):
+        img = self.get_colorized_depth_image_(img, cmap=cmap)
+        cv2.imwrite(filename, img)
+        if name and self._wandb_logger:
+            wandb.log(
+                {
+                    name: wandb.Image(self.get_save_path(filename)),
+                    "trainer/global_step": step,
+                }
+            )
+    
+    def save_colorized_depth(
+        self,
+        filename,
+        depth,
+        cmap=DEFAULT_GRAYSCALE_KWARGS["cmap"]
+    ):
+        save_path = self.get_save_path(filename)
+        self._save_colorized_depth(save_path, depth, cmap)
+        return save_path
+    
     def get_grayscale_image_(self, img, data_range, cmap):
         img = self.convert_data(img)
         img = np.nan_to_num(img)
@@ -650,3 +722,11 @@ class SaverMixin:
         with open(save_path, "w") as f:
             f.write(json.dumps(payload))
         return save_path
+    
+    
+    def save_camera(self, filename, camera) -> str:
+        save_path = self.get_save_path(filename)
+        with open(save_path, "wb") as f:
+            pickle.dump(camera, f)
+        return save_path
+    

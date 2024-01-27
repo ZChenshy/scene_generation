@@ -315,9 +315,6 @@ class GaussianBaseModel(BaseGeometry, GaussianIO):
                     #! <<<
                     positions = np.array(pcd.vertices)
                     colors = pcd.colors[:, 0:3]
-                    shs = np.random.random((positions.shape[0], 3)) / 255.0
-                    # C0 = 0.28209479177387814
-                    # colors = shs * C0 + 0.5
                     normals = np.zeros_like(positions)
                     pcd = BasicPointCloud(
                         points=positions, colors=colors, normals=normals
