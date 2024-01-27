@@ -1,5 +1,4 @@
 import numpy as np
-import open3d as o3d
 import trimesh
 
 def quaternion_to_angle(quaternion):
@@ -7,15 +6,6 @@ def quaternion_to_angle(quaternion):
     x, y, z, w = quaternion
     angle = 2 * np.arctan2(np.sqrt(x**2 + y**2 + z**2), w)
     return angle
-
-def trimesh_to_o3d(mesh):
-    # 将 Trimesh 对象转换为 Open3D 中的 TriangleMesh 对象
-    vertices = mesh.vertices
-    faces = mesh.faces
-    o3d_mesh = o3d.geometry.TriangleMesh()
-    o3d_mesh.vertices = o3d.utility.Vector3dVector(vertices)
-    o3d_mesh.triangles = o3d.utility.Vector3iVector(faces)
-    return o3d_mesh
 
 def create_box(extents, translation):
     mesh = trimesh.creation.box(extents=extents)
@@ -39,7 +29,7 @@ def get_vertices(bbox):
     thickness = 0.01
     width0 = (x2 - x1) * scale
     length0 =(y2 - y1) * scale
-    height0 = (z2 - z1) * scale
+    height0 = (z2 - z1) * scale 
    
     x1, y1, z1 = bbox[0] - np.array([width0*(scale-1)/2, 0, height0*(scale-1)/2])
     x2, y2, z2 = bbox[1] + np.array([width0*(scale-1)/2, length0*(scale-1)/2, height0*(scale-1)/2])
@@ -63,20 +53,6 @@ def get_vertices(bbox):
     ]
     pcd = [sample_mesh_uniformly(mesh,30000) for mesh in box_mesh]
     return pcd
-
-def vis_pc(pcd):
-# 点云可视化
-    # 获取视图控制器
-    
-    vis = o3d.visualization.Visualizer()
-    coordinate_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.6, origin=[0, 0, 0])
-    vis.create_window(width=800, height=600)  
-    vis.add_geometry(pcd)
-    vis.add_geometry(coordinate_frame)
-
-    vis.poll_events()
-    vis.update_renderer()
-    vis.run() 
 
 def add_axis(lenx, leny, lenz, origin):
         
@@ -109,6 +85,3 @@ if __name__ == '__main__':
         [2,3,4]
                     ])
     pcd = get_vertices(bbox)
-
-    for i in range(6):
-        vis_pc(pcd[i])
