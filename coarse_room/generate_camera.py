@@ -66,10 +66,12 @@ def get_cam(bbox,
             fovy = 60 , 
             height = 512,
             width = 512,
+            sample_num = 20,
             save_dir = './coarse_room/camera_config/camsInfo.pkl'):
     """
     传入参数：场景的bbox！！！（这个是必须的）
     其他：fovx，fovy(角度制);image_height，image_width。未传入将使用默认的。
+    sample_num 决定采样多少个相机位置
     .........................
     .  +++++++++++++++++++  .
     .  +                 +  .
@@ -99,8 +101,8 @@ def get_cam(bbox,
     p2 = np.array([corner2[0], corner1[1], corner1[2]])
     p3 = np.array([corner2[0], corner1[1], corner2[2]])
     p4 = np.array([corner1[0], corner1[1], corner2[2]])
-    target_positions = np.array([p1, p2, p3, p4, (p1 + p3) / 2])
-    campositions = sample_points_on_rectangle(trajectory_box, 30)
+    target_positions = np.array([p1, p2, p3, p4])
+    campositions = sample_points_on_rectangle(trajectory_box, sample_num)
 
     camlist = {}
     step = 0
