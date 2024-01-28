@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import torch
 import torch.nn.functional as F
-from diffusers import StableDiffusionXLControlNetPipeline, ControlNetModel, AutoencoderKL, DDIMScheduler, UNet2DConditionModel
+from diffusers import StableDiffusionXLControlNetPipeline, ControlNetModel, AutoencoderKL, DDIMScheduler
 from diffusers.utils.import_utils import is_xformers_available
 
 import threestudio
@@ -11,7 +11,6 @@ from threestudio.utils.base import BaseObject
 from threestudio.utils.misc import C, cleanup, parse_version
 from threestudio.utils.typing import *
 
-# TODO: 不再使用PipeLine，直接调用Unet和VAE，进行Encode和Noise Predict
 @threestudio.register("stable-diffusion-xl-depth-controlnet-guidance")
 class XLContrlnetGuidance(BaseObject):
     
@@ -55,7 +54,7 @@ class XLContrlnetGuidance(BaseObject):
             torch.bfloat16 if self.cfg.half_precision_weights else torch.float32
         )
         
-        self.controlnet = ControlNetModel.from_pretrained(
+        controlnet = ControlNetModel.from_pretrained(
             self.cfg.controlnet_name_or_path,
             torch_dtype=self.weights_dtype, 
             cache_dir=self.cfg.cache_dir,
