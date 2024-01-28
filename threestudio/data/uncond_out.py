@@ -636,23 +636,23 @@ class RandomCameraIterableDatasetCustom(IterableDataset, Updateable):
         mvp_mtx: Float[Tensor, "B 4 4"] = get_mvp_matrix(c2w, self.proj_mtx)
         self.fovy = fovy
 
-        # return {
-        #     "mvp_mtx": mvp_mtx,
-        #     "camera_positions": camera_positions,
-        #     "c2w": c2w,
-        #     "w2c": w2c,
-        #     "light_positions": light_positions,
-        #     "elevation": torch.tensor([0., 0., 0.]),
-        #     "azimuth": torch.tensor([0., 0., 0.]),
-        #     "camera_distances": torch.tensor([0., 0., 0.]),
-        #     "height": self.height,
-        #     "width": self.width,
-        #     "fovy": self.fovy,
-        #     "proj_mtx": self.proj_mtx,
-        # }
-        batch = {}
-        batch = np.load("/remote-home/hzp/scene_generation/outputs/gaussiandroom-sd/test@20240126-053353/save/camera/7-camera.npy", allow_pickle=True).item()
-        return batch
+        return {
+            "mvp_mtx": mvp_mtx,
+            "camera_positions": camera_positions,
+            "c2w": c2w,
+            "w2c": w2c,
+            "light_positions": light_positions,
+            "elevation": torch.tensor([0., 0., 0.]),
+            "azimuth": torch.tensor([0., 0., 0.]),
+            "camera_distances": torch.tensor([0., 0., 0.]),
+            "height": self.height,
+            "width": self.width,
+            "fovy": self.fovy,
+            "proj_mtx": self.proj_mtx,
+        }
+        # batch = {}
+        # batch = np.load("/remote-home/hzp/scene_generation/outputs/gaussiandroom-sd/test@20240126-053353/save/camera/7-camera.npy", allow_pickle=True).item()
+        # return batch
     
     
 def look_at(campos,target):

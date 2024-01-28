@@ -77,12 +77,12 @@ class scene_loader:
             '4':'wall2',
             '5':'wall3'
             }
+        colors = [[233, 194, 123],[233, 194, 123], [192, 192, 192],  [175, 238, 238], [230, 190, 120], [230, 190, 120] ]
         #按照需求添加自己需要的
         for i, pcd in enumerate(scene_bbox_pc):
-
-
-            semantic_color = self.update_color_dict(extra_dict[str(i)])
-            pcd_colors = np.repeat(np.array(semantic_color).reshape(1,-1) /255, np.asarray(pcd.vertices).shape[0], axis=0)
+            #semantic_color = self.update_color_dict(extra_dict[str(i)])
+            color = np.array(colors[i])
+            pcd_colors = np.repeat(np.array(color).reshape(1,-1) /255, np.asarray(pcd.vertices).shape[0], axis=0)
             pcd.visual.vertex_colors = pcd_colors  
             scene.add_geometry(pcd)
         
@@ -102,15 +102,6 @@ class scene_loader:
         with open(self.color_label_dict_json , 'w') as f:
             json.dump(self.color_label_dict,f)
         
-        # o3d_pcd = o3d.geometry.PointCloud()
-        # o3d_pcd.points = o3d.utility.Vector3dVector(merged_pcd.vertices)
-        # o3d_pcd.colors = o3d.utility.Vector3dVector(merged_pcd.colors / 255)  # trimesh的颜色范围是0-255，而open3d的颜色范围是0-1
-
-        # # 定义体素大小
-        # voxel_size = 0.02
-
-        # # 进行体素下采样
-        # downsampled_pcd = o3d_pcd.voxel_down_sample(voxel_size)
         merged_pcd.export(scene_savedir)
         return scene
     
@@ -170,5 +161,5 @@ if __name__== "__main__":
     
     scene_loader = scene_loader(scene_path, models_path,room_id,scene_id)
     scene = scene_loader.generate_scene()
-    scene.show()
+    #scene.show()
     print()
