@@ -164,11 +164,12 @@ def main(args, extras) -> None:
 
     # set a different seed for each device
     pl.seed_everything(cfg.seed + get_rank(), workers=True)
-
-    dm = threestudio.find(cfg.data_type)(cfg.data)
+    
     system: BaseSystem = threestudio.find(cfg.system_type)(
         cfg.system, resumed=cfg.resume is not None
     )
+    dm = threestudio.find(cfg.data_type)(cfg.data)
+    
     system.set_save_dir(os.path.join(cfg.trial_dir, "save"))
 
     if args.gradio:
