@@ -136,12 +136,17 @@ class XLContrlnetGuidanceImage(BaseObject, SaverMixin):
             generator=generator, return_dict=False
         )[0] # BHWC B=1 C=3 data_range: [0, 1] np.array
 
+        gen_image_PIL = Image.fromarray((gen_image.squeeze() * 255.0).clip(0, 255).astype(np.uint8))
         gen_image = torch.from_numpy(gen_image).squeeze(0).to(device=self.device, dtype=self.weights_dtype) # HWC data_range: [0, 1]
+        
+        
         Ll1_loss = l1_loss(gen_image, rgb)
         ssim_loss = ssim(gen_image, rgb)
         
         guidance_out = {
             "loss_l1": Ll1_loss,
             "loss_ssim": ssim_loss,
+            "estimate_depth_PIL": depth_PIL,
+            "gen_image_PIL": gen_image_PIL
         }
         return guidance_out

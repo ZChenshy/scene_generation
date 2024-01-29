@@ -30,7 +30,6 @@ class GaussianRoom(BaseLift3DSystem):
             self.cfg.prompt_processor
         )
         self.prompt_utils = self.prompt_processor()
-        self.transform = transforms.ToTensor()
         
         
     def on_fit_start(self) -> None:
@@ -76,8 +75,8 @@ class GaussianRoom(BaseLift3DSystem):
 
         visibility_filter = out["visibility_filter"]
         radii = out["radii"]
-        guidance_inp = out["comp_rgb"].squeeze()  # HWC, c=3, [0, 1]
-        guidance_cond = out["comp_depth"].squeeze() # HWC, c=1, not normalized
+        guidance_inp = out["comp_rgb"]  # BHWC, c=3, [0, 1]
+        guidance_cond = out["comp_depth"]# BHWC, c=1, absolute depth, not normalized
         viewspace_point_tensor = out["viewspace_points"]
         
         self.save_camera(f"camera/{self.true_global_step}-camera.pkl", batch)
@@ -92,22 +91,35 @@ class GaussianRoom(BaseLift3DSystem):
             f"depth/{self.true_global_step}-depth.png", 
             guidance_cond,
         )
-        #! <<< Debug <<<
         
+        # * SDS >>>
         # guidance_out = self.guidance(
         #     rgb=guidance_inp, image_cond=guidance_cond, 
         #     prompt_utils=self.prompt_utils, 
         #/     **batch, rgb_as_latents=False
         # )
-        guidance_inp = guidance_inp.permute(2, 0, 1) # CHW c=3 [0, 1]
-        gt_image = Image.open("/remote-home/hzp/scene_generation/outputs/gaussiandroom-sd/test@20240126-053353/save/controlnet-depth-sdxl-1.0/estimateDepth_con-0.55_seed-978364352/7-_seed978364352.png").resize((512, 512))
-        gt_image = self.transform(gt_image).to(self.device) # CHW c=3 [0, 1]
-        
-        L1_loss = l1_loss(guidance_inp, gt_image)
-        loss = (1.0 - 0.2) * L1_loss + 0.2 * (1.0 - ssim(guidance_inp, gt_image))
         
         # loss_sds = 0.0
         # loss = 0.0
+        
+        # for name, value in guidance_out.items():
+        #     self.log(f"train/{name}", value)
+        #     if name.startswith("loss_"):
+        #         loss_sds += value * self.C(
+        #             self.cfg.loss[name.replace("loss_", "lambda_")]
+        #         )
+        # * SDS <<<
+        
+        # * L1_loss >>>
+        guidance_inp = guidance_inp.squeeze(),
+        guidance_out = self.guidance(
+            guidance_inp,
+            self.prompt_utils,
+            
+        )
+        loss_l1 = 0.0
+        loss = 0.0
+        #* L1_loss <<<
         
         self.log(
             "gauss_num",
@@ -118,12 +130,17 @@ class GaussianRoom(BaseLift3DSystem):
             logger=True,
         )
         
-        # for name, value in guidance_out.items():
-        #     self.log(f"train/{name}", value)
-        #     if name.startswith("loss_"):
-        #         loss_sds += value * self.C(
-        #             self.cfg.loss[name.replace("loss_", "lambda_")]
-        #         )
+        for name, value in guidance_out.items():
+            self.log(f"train/{name}", value)
+            if name.startswith("loss_"):
+                loss_l1 += value * self.C(
+                    self.cfg.loss[name.replace("loss_", "lambda_")]
+                ) # 包括l1 SSIM
+            elif name == "estimate_depth_PIL":
+                value.save(self.get_save_path(f"{name}/{self.true_global_step}.png"))
+            elif name == "gen_image_PIL":
+                value.save(self.get_save_path(f"{name}/{self.true_global_step}.png"))
+                
                 
         # xyz_mean = None
         # if self.cfg.loss["lambda_position"] > 0.0:
