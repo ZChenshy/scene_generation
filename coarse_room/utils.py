@@ -22,17 +22,17 @@ def sample_mesh_uniformly(mesh, num_points):
 
 def get_vertices(bbox):
     #Given the scene's bounding box, obtain six faces represented by point cloud corresponding to this bounding box
-    scale = 1.5
+    scale = np.array([1.5, 2.5, 1.2])
     x1, y1, z1 = bbox[0] 
     x2, y2, z2 = bbox[1]
 
     thickness = 0.01
-    width0 = (x2 - x1) * scale
-    length0 =(y2 - y1) * scale
-    height0 = (z2 - z1) * scale 
+    width0 = (x2 - x1) * scale[0]
+    length0 =(y2 - y1) * scale[1]
+    height0 = (z2 - z1) * scale [2]
    
-    x1, y1, z1 = bbox[0] - np.array([width0*(scale-1)/2, 0, height0*(scale-1)/2])
-    x2, y2, z2 = bbox[1] + np.array([width0*(scale-1)/2, length0*(scale-1)/2, height0*(scale-1)/2])
+    x1, y1, z1 = bbox[0] - np.array([width0*(scale[0]-1)/2, 0, height0*(scale[2]-1)/2])
+    x2, y2, z2 = bbox[1] + np.array([width0*(scale[0]-1)/2, length0*(scale[1]-1)/2, height0*(scale[2]-1)/2])
     width = (x2 - x1) 
     length =(y2 - y1) 
     height = (z2 - z1) 
