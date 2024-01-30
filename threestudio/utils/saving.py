@@ -730,3 +730,8 @@ class SaverMixin:
             pickle.dump(camera, f)
         return save_path
     
+    
+    def load_camera(self, filepath) -> list:
+        with open(filepath, "rb") as f:
+            camera = pickle.load(f)
+        return camera

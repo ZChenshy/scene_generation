@@ -3,6 +3,7 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 from PIL import Image
+from random import randint
 import torchvision.transforms as transforms
 import threestudio
 from threestudio.systems.base import BaseLift3DSystem
@@ -16,7 +17,9 @@ from ..geometry.gaussian_base import BasicPointCloud
 class GaussianRoom(BaseLift3DSystem):
     @dataclass
     class Config(BaseLift3DSystem.Config):
+        # TODO: 写在配置文件中
         visualize_samples: bool = False
+        cam_path: str = "coarse_room/camera_config/camsInfo.pkl" 
         
     cfg: Config
     
@@ -30,16 +33,11 @@ class GaussianRoom(BaseLift3DSystem):
             self.cfg.prompt_processor
         )
         self.prompt_utils = self.prompt_processor()
-        self.transform = transforms.ToTensor()
-        
+        self.cam_list = self.load_camera(self.cfg.cam_path)
+            
         
     def on_fit_start(self) -> None:
         super().on_fit_start()
-        # only used in training
-        self.prompt_processor = threestudio.find(self.cfg.prompt_processor_type)(
-            self.cfg.prompt_processor
-        )
-        self.guidance = threestudio.find(self.cfg.guidance_type)(self.cfg.guidance)
     
     
     def configure_optimizers(self):
@@ -72,15 +70,25 @@ class GaussianRoom(BaseLift3DSystem):
     def training_step(self, batch, batch_idx):
 
         opt = self.optimizers()
-        out = self.forward(batch) # HWC
+        viewpoint_cam_idx = (randint(0, len(self.cam_list)-1))
+        
+        viewpoint_cam = {
+            "c2w": self.cam_list["c2w"][viewpoint_cam_idx].to(self.device),
+            "w2c": self.cam_list["w2c"][viewpoint_cam_idx].to(self.device),
+            "fovx": self.cam_list["fovx"][viewpoint_cam_idx],
+            "fovy": self.cam_list["fovy"][viewpoint_cam_idx],
+            "width": self.cam_list["width"],
+            "height": self.cam_list["height"]
+        }
+        
+        out = self.forward(viewpoint_cam) # HWC
 
         visibility_filter = out["visibility_filter"]
         radii = out["radii"]
         guidance_inp = out["comp_rgb"].squeeze()  # HWC, c=3, [0, 1]
         guidance_cond = out["comp_depth"].squeeze() # HWC, c=1, not normalized
         viewspace_point_tensor = out["viewspace_points"]
-        
-        self.save_camera(f"camera/{self.true_global_step}-camera.pkl", batch)
+    
 
         self.save_rgb_image(
             f"rendered/{self.true_global_step}-rgb.png",
@@ -92,7 +100,6 @@ class GaussianRoom(BaseLift3DSystem):
             f"depth/{self.true_global_step}-depth.png", 
             guidance_cond,
         )
-        #! <<< Debug <<<
         
         # guidance_out = self.guidance(
         #     rgb=guidance_inp, image_cond=guidance_cond, 
@@ -100,14 +107,14 @@ class GaussianRoom(BaseLift3DSystem):
         #/     **batch, rgb_as_latents=False
         # )
         guidance_inp = guidance_inp.permute(2, 0, 1) # CHW c=3 [0, 1]
-        gt_image = Image.open("/remote-home/hzp/scene_generation/outputs/gaussiandroom-sd/test@20240126-053353/save/controlnet-depth-sdxl-1.0/estimateDepth_con-0.55_seed-978364352/7-_seed978364352.png").resize((512, 512))
-        gt_image = self.transform(gt_image).to(self.device) # CHW c=3 [0, 1]
+        # gt_image = Image.open("/remote-home/hzp/scene_generation/outputs/gaussiandroom-sd/test@20240126-053353/save/controlnet-depth-sdxl-1.0/estimateDepth_con-0.55_seed-978364352/7-_seed978364352.png").resize((512, 512))
+        # gt_image = self.transform(gt_image).to(self.device) # CHW c=3 [0, 1]
         
-        L1_loss = l1_loss(guidance_inp, gt_image)
-        loss = (1.0 - 0.2) * L1_loss + 0.2 * (1.0 - ssim(guidance_inp, gt_image))
+        # L1_loss = l1_loss(guidance_inp, gt_image)
+        # loss = (1.0 - 0.2) * L1_loss + 0.2 * (1.0 - ssim(guidance_inp, gt_image))
         
-        # loss_sds = 0.0
-        # loss = 0.0
+        loss_sds = 0.0
+        loss = 0.0
         
         self.log(
             "gauss_num",

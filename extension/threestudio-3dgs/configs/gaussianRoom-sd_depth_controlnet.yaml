@@ -54,7 +54,7 @@ system:
     radii2d_thresh: 1000
     opacity_init: 1 #! 透明度初始化
 
-    geometry_convert_from: "/remote-home/share/room_gen/roomPCD/4944051f-3a7e-4387-b5f3-f925ae6da57e/LivingRoom-4719/scene_pcd_whole_wall.ply" #TODO: Auto connect to scene pcd 
+    geometry_convert_from: "scene_pcd_whole_wall.ply" #TODO: Auto connect to scene pcd 
     load_ply_only_vertex: True #! 仅加载点云中的点位置
 
 
@@ -72,16 +72,16 @@ system:
 
   prompt_processor_type: "stable-diffusion-prompt-processor"
   prompt_processor:
-    pretrained_model_name_or_path: "/remote-home/share/Models/runwayml/stable-diffusion-v1-5"
+    pretrained_model_name_or_path: "/remote-home/hzp/Models/runwayml/stable-diffusion-v1-5"
     prompt: ???
     negative_prompt: "unrealistic, over-saturated, Animation style"
 
 
   guidance_type: "depth-controlnet-SD1.5-guidance"
   guidance:
-    pretrained_model_name_or_path: "/remote-home/share/Models/runwayml/stable-diffusion-v1-5" 
-    controlnet_name_or_path: "/remote-home/share/Models/lllyasviel/control_v11f1p_sd15_depth" 
-    ddim_scheduler_name_or_path: "/remote-home/share/Models/runwayml/stable-diffusion-v1-5" 
+    pretrained_model_name_or_path: "/remote-home/hzp/Models/runwayml/stable-diffusion-v1-5" 
+    controlnet_name_or_path: "/remote-home/hzp/Models/lllyasviel/control_v11f1p_sd15_depth" 
+    ddim_scheduler_name_or_path: "/remote-home/hzp/Models/runwayml/stable-diffusion-v1-5" 
     half_precision_weights: false
     guidance_scale: 100 # 7.5 for csd
     condition_scale: 0.75 # Depth conditioning_scale

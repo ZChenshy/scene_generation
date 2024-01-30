@@ -64,8 +64,8 @@ def look_at(campos,target):
 def get_cam(bbox, 
             fovx = 60 , 
             fovy = 60 , 
-            height = 512,
-            width = 512,
+            height = 1024,
+            width = 1024,
             sample_num = 20,
             save_dir = './coarse_room/camera_config/camsInfo.pkl'):
     """
@@ -104,25 +104,33 @@ def get_cam(bbox,
     target_positions = np.array([p1, p2, p3, p4])
     campositions = sample_points_on_rectangle(trajectory_box, sample_num)
 
-    camlist = {}
-    step = 0
+    camdict = {}
+    c2w_list = []
+    w2c_list = []
+    fovx_list = []
+    fovy_list = []
+
     for campos in campositions:
         for target in target_positions:
             w2c, c2w = look_at(campos, target)
-            camlist[f'{step}'] = {
-                'c2w': c2w,
-                'w2c': w2c,
-                'fovx': fovx,
-                'fovy': fovy,
-                'width': width,
-                'height': height,
-            }
-            step += 1
+            c2w_list.append(c2w)
+            w2c_list.append(w2c)
+            fovx_list.append(fovx)
+            fovy_list.append(fovy)
+            
+    camdict = {
+        "c2w": c2w_list,
+        "w2c": w2c_list,
+        "fovx": fovx_list,
+        "fovy": fovy_list,
+        "width": width,
+        "height": height,
+    }
 
     with open(save_dir, 'wb')as f:
-        pickle.dump(camlist,f)
+        pickle.dump(camdict,f)
 
-    return camlist
+    return camdict
 
 if __name__ == '__main__':
    cams = get_cam(
@@ -130,5 +138,5 @@ if __name__ == '__main__':
            [-0.9685008 ,  0.05031064, -1.3602995 ],
            [ 0.81952091,  0.65031064,  1.45156923]
             ])
-            )
+        )
     
