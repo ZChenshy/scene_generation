@@ -33,8 +33,8 @@ class GaussianRoom(BaseLift3DSystem):
             self.cfg.prompt_processor
         )
         self.prompt_utils = self.prompt_processor()
-        self.transform = transforms.ToTensor()
-        
+        self.cam_list = self.load_camera(self.cfg.cam_path)
+            
         
     def on_fit_start(self) -> None:
         super().on_fit_start()
@@ -114,8 +114,8 @@ class GaussianRoom(BaseLift3DSystem):
         L1_loss = l1_loss(guidance_inp, gt_image)
         loss = (1.0 - 0.2) * L1_loss + 0.2 * (1.0 - ssim(guidance_inp, gt_image))
         
-        # loss_sds = 0.0
-        # loss = 0.0
+        loss_sds = 0.0
+        loss = 0.0
         
         self.log(
             "gauss_num",
