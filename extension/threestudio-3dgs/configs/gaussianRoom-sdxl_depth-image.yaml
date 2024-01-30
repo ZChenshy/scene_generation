@@ -51,6 +51,7 @@ system:
     densify_grad_threshold: 0.0002 #0.01 #original gaussian splatting is 0.0002
     min_opac_prune: 0.005
     split_thresh: 0.02
+    opacity_init: 1.0
 
     prune_big_points: false # default: false #! 设置为True后，地板会变黑？
     radii2d_thresh: 1000 #1000
@@ -76,20 +77,17 @@ system:
   prompt_processor:
     pretrained_model_name_or_path: "/remote-home/hzp/Models/stabilityai/stable-diffusion-xl-base-1.0"
     prompt: ???
-    negative_prompt: "unrealistic, over-saturated, Animation style"
+    negative_prompt: "unrealistic, over-saturated, Animation style, outdoor view"
 
 
-  guidance_type: "stable-diffusion-xl-depth-controlnet-guidance" 
+  guidance_type: "stable-diffusion-xl-depth-controlnet-guidance-image" 
   guidance:
     pretrained_model_name_or_path: "/remote-home/hzp/Models/stabilityai/stable-diffusion-xl-base-1.0" 
     controlnet_name_or_path: "/remote-home/hzp/Models/diffusers/controlnet-depth-sdxl-1.0" 
     half_precision_weights: false
-    guidance_scale: 100 # 7.5 for csd
-    condition_scale: 0.75 # Depth conditioning_scale
-    weighting_strategy: sds
-    min_step_percent: 0.02
-    max_step_percent: 0.98
-    grad_clip: [0, 1.5, 2.0, 1000]
+    conditioning_scale: 0.55 # Depth conditioning_scale
+    random_seed: 978364352 # random seed to generate the image
+    num_inference_steps: 30 # stable diffusion inference step num
 
   exporter_type: "gaussian-mesh-exporter"
 

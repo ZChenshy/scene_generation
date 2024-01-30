@@ -735,3 +735,8 @@ class SaverMixin:
         with open(filepath, "rb") as f:
             camera = pickle.load(f)
         return camera
+    
+    def save_PIL(self, filename, pil_image) -> str:
+        save_path = self.get_save_path(filename)
+        pil_image.save(save_path)
+        return save_path

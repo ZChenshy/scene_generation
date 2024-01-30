@@ -3,6 +3,7 @@ import PIL
 from PIL import Image
 import numpy as np
 import torch
+from torchvision import transforms
 from transformers import DPTImageProcessor, DPTForDepthEstimation
 from diffusers import StableDiffusionXLControlNetPipeline, ControlNetModel, AutoencoderKL
 from diffusers.utils.import_utils import is_xformers_available
@@ -15,7 +16,7 @@ from threestudio.utils.saving import SaverMixin
 from threestudio.utils.loss import l1_loss, ssim
 
 @threestudio.register("stable-diffusion-xl-depth-controlnet-guidance-image")
-class XLContrlnetGuidanceImage(BaseObject, SaverMixin):
+class XLContrlnetGuidanceImage(BaseObject):
     
     @dataclass
     class Config(BaseObject.Config):
@@ -88,14 +89,15 @@ class XLContrlnetGuidanceImage(BaseObject, SaverMixin):
         self.imgProcessor = DPTImageProcessor.from_pretrained(
             pretrained_model_name_or_path=self.cfg.imgProcessor_pretrained_path,
             cache_dir=self.cfg.cache_dir,
-        ).to(self.device)
+        )
+        self.transform = transforms.ToTensor()
         cleanup()
         threestudio.info(f"Loaded Stable Diffusion XL ControlNet and Depth Estimator !")
         
         
     def get_depth_map(self, image) -> PIL.Image :
-        image = self.feature_extractor(images=image, return_tensors="pt").pixel_values.to(self.device)
-        with torch.no_grad(), torch.autocast(device_type=self.device):
+        image = self.imgProcessor(images=image, return_tensors="pt").pixel_values.to(self.device)
+        with torch.no_grad():
             depth_map = self.depth_estimator(image).predicted_depth
 
         depth_map = torch.nn.functional.interpolate(
@@ -115,33 +117,39 @@ class XLContrlnetGuidanceImage(BaseObject, SaverMixin):
     
     def __call__(
         self,
-        rgb: Float[Tensor, "H W C"],
+        rgb: Float[Tensor, "B H W C"],
         prompt,
-        prompt_embeds: Optional[torch.FloatTensor],
-        negative_prompt_embeds: Optional[torch.FloatTensor],
+        # prompt_embeds: Optional[torch.FloatTensor],
+        # negative_prompt_embeds: Optional[torch.FloatTensor],
+        regen=True,
+        generated_image: PIL.Image = None,
         **kwargs,
     ):
-        depth_PIL = self.get_depth_map(rgb)
-        # if self.cfg.save_depth_map:
-        #     self.save_grayscale_image(, "depth_map")
-        
-        generator = torch.Generator(device=self.device).manual_seed(self.cfg.random_seed)
-        
-        # TODO: 
-        # 1. Save to cache file incase of multiple calls (prompt, seed, condition_scale, num_inference_steps, camera_paras)
-        # 2. Using prompt_embedding processed before
-        
-        gen_image = self.pipe(
-            prompt, image=depth_PIL, num_inference_steps=self.cfg.num_inference_steps, controlnet_conditioning_scale=self.cfg.conditioning_scale, output_type="np",
-            generator=generator, return_dict=False
-        )[0] # BHWC B=1 C=3 data_range: [0, 1] np.array
+        image_inp = rgb.squeeze()
+        if regen: 
+            depth_PIL = self.get_depth_map(image_inp)
+            # if self.cfg.save_depth_map:
+            #     self.save_grayscale_image(, "depth_map")
+            
+            generator = torch.Generator(device=self.device).manual_seed(self.cfg.random_seed)
+            
+            # TODO: 
+            # 1. Save to cache file incase of multiple calls (prompt, seed, condition_scale, num_inference_steps, camera_paras)
+            # 2. Using prompt_embedding processed before
+            
+            gen_image = self.pipe(
+                prompt, image=depth_PIL, num_inference_steps=self.cfg.num_inference_steps, controlnet_conditioning_scale=self.cfg.conditioning_scale, output_type="np",
+                generator=generator, return_dict=False
+            )[0] # BHWC B=1 C=3 data_range: [0, 1] np.array
 
-        gen_image_PIL = Image.fromarray((gen_image.squeeze() * 255.0).clip(0, 255).astype(np.uint8))
-        gen_image = torch.from_numpy(gen_image).squeeze(0).to(device=self.device, dtype=self.weights_dtype) # HWC data_range: [0, 1]
+            gen_image_PIL = Image.fromarray((gen_image.squeeze() * 255.0).clip(0, 255).astype(np.uint8))
+            gen_image = torch.from_numpy(gen_image).squeeze(0).to(device=self.device, dtype=self.weights_dtype) # HWC data_range: [0, 1]
+        else:
+            gen_image_PIL = generated_image
+            gen_image = self.transform(gen_image_PIL).permute(1, 2, 0).to(device=self.device, dtype=self.weights_dtype)
         
-        
-        Ll1_loss = l1_loss(gen_image, rgb)
-        ssim_loss = ssim(gen_image, rgb)
+        Ll1_loss = l1_loss(image_inp, gen_image)
+        ssim_loss = ssim(gen_image, image_inp)
         
         guidance_out = {
             "loss_l1": Ll1_loss,
