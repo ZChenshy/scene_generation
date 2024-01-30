@@ -1,11 +1,9 @@
 from dataclasses import dataclass
-import imp
 import PIL
 from PIL import Image
 import numpy as np
 import torch
-import torch.nn.functional as F
-from transformers import DPTFeatureExtractor, DPTForDepthEstimation
+from transformers import DPTImageProcessor, DPTForDepthEstimation
 from diffusers import StableDiffusionXLControlNetPipeline, ControlNetModel, AutoencoderKL
 from diffusers.utils.import_utils import is_xformers_available
 
@@ -27,7 +25,7 @@ class XLContrlnetGuidanceImage(BaseObject, SaverMixin):
         controlnet_name_or_path: str = "diffusers/controlnet-depth-sdxl-1.0"
         vae_pretrained_path: str = "madebyollin/sdxl-vae-fp16-fix"
         depth_estimator_pretrained_path: str = "Intel/dpt-hybrid-midas"
-        feature_extractor_pretrained_path: str = "Intel/dpt-hybrid-midas"
+        imgProcessor_pretrained_path: str = "Intel/dpt-hybrid-midas"
         
         enable_memory_efficient_attention: bool = False
         enable_sequential_cpu_offload: bool = False
@@ -54,7 +52,7 @@ class XLContrlnetGuidanceImage(BaseObject, SaverMixin):
             torch.float16 if self.cfg.half_precision_weights else torch.float32
         )
         
-        # Incase of decode error occured when using float16
+        # Incase of decoding error occured when using float16
         if self.cfg.half_precision_weights:
             vae = AutoencoderKL.from_pretrained(
                 self.cfg.vae_pretrained_path,
@@ -87,11 +85,11 @@ class XLContrlnetGuidanceImage(BaseObject, SaverMixin):
             cache_dir=self.cfg.cache_dir,
         ).to(self.device)
         
-        self.feature_extractor = DPTFeatureExtractor.from_pretrained(
-            pretrained_model_name_or_path=self.cfg.feature_extractor_pretrained_path,
+        self.imgProcessor = DPTImageProcessor.from_pretrained(
+            pretrained_model_name_or_path=self.cfg.imgProcessor_pretrained_path,
             cache_dir=self.cfg.cache_dir,
         ).to(self.device)
-        torch.cuda.empty_cache()
+        cleanup()
         threestudio.info(f"Loaded Stable Diffusion XL ControlNet and Depth Estimator !")
         
         
@@ -117,24 +115,38 @@ class XLContrlnetGuidanceImage(BaseObject, SaverMixin):
     
     def __call__(
         self,
-        rgb: Float[Tensor, "B H W C"],
+        rgb: Float[Tensor, "H W C"],
         prompt,
+        prompt_embeds: Optional[torch.FloatTensor],
+        negative_prompt_embeds: Optional[torch.FloatTensor],
         **kwargs,
     ):
         depth_PIL = self.get_depth_map(rgb)
         # if self.cfg.save_depth_map:
         #     self.save_grayscale_image(, "depth_map")
+        
         generator = torch.Generator(device=self.device).manual_seed(self.cfg.random_seed)
+        
+        # TODO: 
+        # 1. Save to cache file incase of multiple calls (prompt, seed, condition_scale, num_inference_steps, camera_paras)
+        # 2. Using prompt_embedding processed before
+        
         gen_image = self.pipe(
             prompt, image=depth_PIL, num_inference_steps=self.cfg.num_inference_steps, controlnet_conditioning_scale=self.cfg.conditioning_scale, output_type="np",
-            generator=generator, return_dict=True
-        ).images
+            generator=generator, return_dict=False
+        )[0] # BHWC B=1 C=3 data_range: [0, 1] np.array
 
+        gen_image_PIL = Image.fromarray((gen_image.squeeze() * 255.0).clip(0, 255).astype(np.uint8))
+        gen_image = torch.from_numpy(gen_image).squeeze(0).to(device=self.device, dtype=self.weights_dtype) # HWC data_range: [0, 1]
+        
+        
         Ll1_loss = l1_loss(gen_image, rgb)
         ssim_loss = ssim(gen_image, rgb)
         
         guidance_out = {
             "loss_l1": Ll1_loss,
             "loss_ssim": ssim_loss,
+            "estimate_depth_PIL": depth_PIL,
+            "gen_image_PIL": gen_image_PIL
         }
         return guidance_out

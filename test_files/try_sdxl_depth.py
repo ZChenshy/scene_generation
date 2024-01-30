@@ -8,6 +8,7 @@ from diffusers import ControlNetModel, StableDiffusionXLControlNetPipeline, Auto
 from diffusers.utils import load_image
 from torchvision.transforms import ToTensor
 
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 controlnet_pretrained_path = "/remote-home/share/Models/diffusers/controlnet-depth-sdxl-1.0"
 sdxl_pretrained_path = "/remote-home/share/Models/stabilityai/stable-diffusion-xl-base-1.0"
 vae_pretrained_path = "/remote-home/share/Models/madebyollin/sdxl-vae-fp16-fix"
@@ -92,9 +93,11 @@ for img_name in render_img_list:
         
         generator = torch.Generator("cuda").manual_seed(seed)
         images = pipe(
-            prompt, image=depth_image, num_inference_steps=30, controlnet_conditioning_scale=controlnet_conditioning_scale, generator=generator, return_dict=True, 
+            prompt, image=depth_image, num_inference_steps=30, controlnet_conditioning_scale=controlnet_conditioning_scale, generator=generator, return_dict=False, 
             output_type="np"
-        )
+        )[0] # BHWC B=1 C=3 data_range: [0, 1] 
+        gen_image_PIL = Image.fromarray((images.squeeze() * 255.0).clip(0, 255).astype(np.uint8))
+        gen_image_PIL.save("/remote-home/hzp/scene_generation/test.png")
         # images[0].save( os.path.join(save_dir, f"{img_name[:2]}_seed{seed}.png") )
         print('done time')
         
