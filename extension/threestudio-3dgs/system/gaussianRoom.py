@@ -3,7 +3,7 @@ import os
 import numpy as np
 import torch
 from PIL import Image
-from random import randint
+from random import choice
 import torchvision.transforms as transforms
 import threestudio
 from threestudio.systems.base import BaseLift3DSystem
@@ -20,6 +20,7 @@ class GaussianRoom(BaseLift3DSystem):
         # TODO: 写在配置文件中
         visualize_samples: bool = False
         cam_path: str = "coarse_room/camera_config/camsInfo.pkl" 
+        single_iter: int = 10 # 每个角度迭代的次数
         
     cfg: Config
     
@@ -34,6 +35,8 @@ class GaussianRoom(BaseLift3DSystem):
         )
         self.prompt_utils = self.prompt_processor()
         self.cam_list = self.load_camera(self.cfg.cam_path)
+        self.cam_iter_count = {i: 0 for i in range(len(self.cam_list["fovy"]))}
+        print("configure done")
             
         
     def on_fit_start(self) -> None:
@@ -70,9 +73,15 @@ class GaussianRoom(BaseLift3DSystem):
     def training_step(self, batch, batch_idx):
 
         opt = self.optimizers()
-        # viewpoint_cam_idx = (randint(0, len(self.cam_list)-1))
-        viewpoint_cam_idx = 50 # 暂时固定
         
+        # 每个视角的最多迭代次数
+        if len(self.cam_iter_count) != 0:
+            viewpoint_cam_idx = choice(list(self.cam_iter_count.keys()))
+            self.cam_iter_count[viewpoint_cam_idx] += 1
+            
+        if self.cam_iter_count[viewpoint_cam_idx] == self.cfg.single_iter:
+            del self.cam_iter_count[viewpoint_cam_idx]
+            
         viewpoint_cam = {
             # 为了让BatchSize为1，所以unsqueeze
             "c2w": torch.tensor(self.cam_list["c2w"][viewpoint_cam_idx]).unsqueeze(0).to(self.device),
@@ -92,21 +101,23 @@ class GaussianRoom(BaseLift3DSystem):
         viewspace_point_tensor = out["viewspace_points"]
     
 
-        self.save_rgb_image(
-            f"rendered/{viewpoint_cam_idx}-rgb.png",
-            img=out["comp_rgb"].squeeze(),
-            data_format="HWC",
-        )
+        if not os.path.exists(self.get_save_path(f"rendered/{viewpoint_cam_idx}-rgb.png")):
+            self.save_rgb_image(
+                f"rendered/{viewpoint_cam_idx}-rgb.png",
+                img=out["comp_rgb"].squeeze(),
+                data_format="HWC",
+            )
         
-        self.save_colorized_depth(
-            filename=f"depth/{viewpoint_cam_idx}-depth.png", 
-            depth=out["comp_depth"].squeeze(),
-        )
+            self.save_colorized_depth(
+                filename=f"depth/{viewpoint_cam_idx}-depth.png", 
+                depth=out["comp_depth"].squeeze(),
+            )
         
         guidance_inp = out["comp_rgb"] # BHWC, c=3, [0, 1]
         regen = True if not os.path.exists(self.get_save_path(f"generated/{viewpoint_cam_idx}-rgb.png")) else False
         
         generated_image = None
+        
         if not regen:
             generated_image = Image.open(self.get_save_path(f"generated/{viewpoint_cam_idx}-rgb.png")) 
         
@@ -130,7 +141,7 @@ class GaussianRoom(BaseLift3DSystem):
         
         
         loss_img = 0.0
-        loss = 0.0
+        # loss = 0.0
         
         self.log(
             "gauss_num",
@@ -153,51 +164,51 @@ class GaussianRoom(BaseLift3DSystem):
         #         value.save(self.get_save_path(f"{name}/{self.true_global_step}.png"))
                 
                 
-        xyz_mean = None
-        if self.cfg.loss["lambda_position"] > 0.0:
-            xyz_mean = self.geometry.get_xyz.norm(dim=-1)
-            loss_position = xyz_mean.mean()
-            self.log(f"train/loss_position", loss_position)
-            loss += self.C(self.cfg.loss["lambda_position"]) * loss_position
+        # xyz_mean = None
+        # if self.cfg.loss["lambda_position"] > 0.0:
+        #     xyz_mean = self.geometry.get_xyz.norm(dim=-1)
+        #     loss_position = xyz_mean.mean()
+        #     self.log(f"train/loss_position", loss_position)
+        #     loss += self.C(self.cfg.loss["lambda_position"]) * loss_position
 
-        if self.cfg.loss["lambda_opacity"] > 0.0:
-            scaling = self.geometry.get_scaling.norm(dim=-1)
-            loss_opacity = (
-                scaling.detach().unsqueeze(-1) * self.geometry.get_opacity
-            ).sum()
-            self.log(f"train/loss_opacity", loss_opacity)
-            loss += self.C(self.cfg.loss["lambda_opacity"]) * loss_opacity
+        # if self.cfg.loss["lambda_opacity"] > 0.0:
+        #     scaling = self.geometry.get_scaling.norm(dim=-1)
+        #     loss_opacity = (
+        #         scaling.detach().unsqueeze(-1) * self.geometry.get_opacity
+        #     ).sum()
+        #     self.log(f"train/loss_opacity", loss_opacity)
+        #     loss += self.C(self.cfg.loss["lambda_opacity"]) * loss_opacity
 
-        if self.cfg.loss["lambda_scales"] > 0.0:
-            scale_sum = torch.sum(self.geometry.get_scaling)
-            self.log(f"train/scales", scale_sum)
-            loss += self.C(self.cfg.loss["lambda_scales"]) * scale_sum
+        # if self.cfg.loss["lambda_scales"] > 0.0:
+        #     scale_sum = torch.sum(self.geometry.get_scaling)
+        #     self.log(f"train/scales", scale_sum)
+        #     loss += self.C(self.cfg.loss["lambda_scales"]) * scale_sum
 
-        if self.cfg.loss["lambda_tv_loss"] > 0.0:
-            loss_tv = self.C(self.cfg.loss["lambda_tv_loss"]) * tv_loss(
-                out["comp_rgb"].permute(0, 3, 1, 2)
-            )
-            self.log(f"train/loss_tv", loss_tv)
-            loss += loss_tv
+        # if self.cfg.loss["lambda_tv_loss"] > 0.0:
+        #     loss_tv = self.C(self.cfg.loss["lambda_tv_loss"]) * tv_loss(
+        #         out["comp_rgb"].permute(0, 3, 1, 2)
+        #     )
+        #     self.log(f"train/loss_tv", loss_tv)
+        #     loss += loss_tv
             
-        if (
-            out.__contains__("comp_depth")
-            and self.cfg.loss["lambda_depth_tv_loss"] > 0.0
-        ):
-            loss_depth_tv = self.C(self.cfg.loss["lambda_depth_tv_loss"]) * (
-                # tv_loss(out["comp_normal"].permute(0, 3, 1, 2)) # ! 这里的comp_normal是怎么得到的
-                tv_loss(out["comp_depth"].permute(0, 3, 1, 2))
-            )
-            self.log(f"train/loss_depth_tv", loss_depth_tv)
-            loss += loss_depth_tv
+        # if (
+        #     out.__contains__("comp_depth")
+        #     and self.cfg.loss["lambda_depth_tv_loss"] > 0.0
+        # ):
+        #     loss_depth_tv = self.C(self.cfg.loss["lambda_depth_tv_loss"]) * (
+        #         # tv_loss(out["comp_normal"].permute(0, 3, 1, 2)) # ! 这里的comp_normal是怎么得到的
+        #         tv_loss(out["comp_depth"].permute(0, 3, 1, 2))
+        #     )
+        #     self.log(f"train/loss_depth_tv", loss_depth_tv)
+        #     loss += loss_depth_tv
 
-        for name, value in self.cfg.loss.items():
-            self.log(f"train_params/{name}", self.C(value))
+        # for name, value in self.cfg.loss.items():
+        #     self.log(f"train_params/{name}", self.C(value))
             
             
         # loss_sds.backward(retain_graph=True)
         loss_img.backward(retain_graph=True)
-        loss.backward(retain_graph=True)
+        # loss.backward(retain_graph=True)
         
         iteration = self.global_step
         self.geometry.update_states(
@@ -242,9 +253,9 @@ class GaussianRoom(BaseLift3DSystem):
             name="validation_step",
             step=self.global_step,
         )
-        #// 每次Evaluation都保存点云
-        #// save_path = self.get_save_path(f"point_cloud_it{self.global_step}.ply")
-        #// self.geometry.save_ply(save_path)    
+        # 每次Evaluation都保存点云
+        save_path = self.get_save_path(f"point_cloud_it{self.global_step}.ply")
+        self.geometry.save_ply(save_path)    
     
     def on_validation_epoch_end(self):
         pass

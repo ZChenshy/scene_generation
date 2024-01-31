@@ -36,17 +36,17 @@ system:
   geometry_type: "gaussian-splatting"
   geometry:
     max_num: 1000000 #8000000 # 500000 is original, max number of points
-    position_lr: [0, 0.00005, 0.000025, 1500] # [0, 0.001, 0.00002, 1000] [start_step, start_value, end_value, end_step] will multiply by 10 at create_from_pcd
-    scale_lr: 0.005    # 0.005
-    feature_lr: 0.005  # 0.01
-    opacity_lr: 0.011  # 0.05
+    position_lr: [0, 0.00016, 0.0000016, 1760] # [0, 0.001, 0.00002, 1000] [start_step, start_value, end_value, end_step] will multiply by 10 at create_from_pcd
+    scale_lr: 0.005   # 0.005
+    feature_lr: 0.0025 # 0.01
+    opacity_lr: 0.05 # 0.05
     rotation_lr: 0.001 # 0.005
     densification_interval: 100 #300
     prune_interval: 100
     opacity_reset_interval: 50000000
     densify_from_iter: 500
     densify_until_iter: ${trainer.max_steps}
-    prune_from_iter: 500
+    prune_from_iter: 0
     prune_until_iter: ${trainer.max_steps}
     densify_grad_threshold: 0.0002 #0.01 #original gaussian splatting is 0.0002
     min_opac_prune: 0.005
@@ -56,7 +56,8 @@ system:
     prune_big_points: false # default: false #! 设置为True后，地板会变黑？
     radii2d_thresh: 1000 #1000
 
-    geometry_convert_from: "coarse_room/scene_pcd_whole_wall.ply" #TODO: Auto connect to scene pcd 
+    # geometry_convert_from: "coarse_room/scene_pcd_whole_wall.ply" #TODO: Auto connect to scene pcd 
+    geometry_convert_from: "coarse_room/scene_pcd_semantic_wall.ply" #TODO: Auto connect to scene pcd 
     load_ply_only_vertex: True #! 仅加载点云中的点位置，颜色随机初始化
 
 
@@ -109,7 +110,7 @@ system:
 
 
 trainer:
-  max_steps: 2000
+  max_steps: 1760 # single iter count * camera positions count
   log_every_n_steps: 1
   num_sanity_val_steps: 0
   val_check_interval: 100

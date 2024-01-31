@@ -200,8 +200,8 @@ class SaverMixin:
         mask = np.logical_not(invalid_mask)
 
         # normalize
-        vmin = np.percentile(img[mask],2) if vmin is None else vmin
-        vmax = np.percentile(img[mask],98) if vmax is None else vmax
+        vmin = np.percentile(img[mask],0) if vmin is None else vmin
+        vmax = np.percentile(img[mask],100) if vmax is None else vmax
         if vmin != vmax:
             img = (img - vmin) / (vmax - vmin)  # vmin..vmax
         else:

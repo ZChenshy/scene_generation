@@ -97,7 +97,7 @@ class XLContrlnetGuidanceImage(BaseObject):
         
     def get_depth_map(self, image) -> PIL.Image :
         image = self.imgProcessor(images=image, return_tensors="pt").pixel_values.to(self.device)
-        with torch.no_grad():
+        with torch.no_grad(), torch.autocast("cuda"):
             depth_map = self.depth_estimator(image).predicted_depth
 
         depth_map = torch.nn.functional.interpolate(
@@ -154,7 +154,7 @@ class XLContrlnetGuidanceImage(BaseObject):
         guidance_out = {
             "loss_l1": Ll1_loss,
             "loss_ssim": ssim_loss,
-            "estimate_depth_PIL": depth_PIL,
+            "estimate_depth_PIL": depth_PIL if regen else None,
             "gen_image_PIL": gen_image_PIL
         }
         return guidance_out
