@@ -81,43 +81,45 @@ class XLContrlnetGuidanceImage(BaseObject):
             cache_dir=self.cfg.cache_dir,
         ).to(self.device)
         
-        self.depth_estimator = DPTForDepthEstimation.from_pretrained(
-            pretrained_model_name_or_path=self.cfg.depth_estimator_pretrained_path,
-            cache_dir=self.cfg.cache_dir,
-        ).to(self.device)
+        # self.depth_estimator = DPTForDepthEstimation.from_pretrained(
+        #     pretrained_model_name_or_path=self.cfg.depth_estimator_pretrained_path,
+        #     cache_dir=self.cfg.cache_dir,
+        # ).to(self.device)
         
-        self.imgProcessor = DPTImageProcessor.from_pretrained(
-            pretrained_model_name_or_path=self.cfg.imgProcessor_pretrained_path,
-            cache_dir=self.cfg.cache_dir,
-        )
+        # self.imgProcessor = DPTImageProcessor.from_pretrained(
+        #     pretrained_model_name_or_path=self.cfg.imgProcessor_pretrained_path,
+        #     cache_dir=self.cfg.cache_dir,
+        # )
         self.transform = transforms.ToTensor()
+        self.pipe.enable_model_cpu_offload()
         cleanup()
-        threestudio.info(f"Loaded Stable Diffusion XL ControlNet and Depth Estimator !")
+        threestudio.info(f"Loaded Stable Diffusion XL ControlNet!")
         
         
-    def get_depth_map(self, image) -> PIL.Image :
-        image = self.imgProcessor(images=image, return_tensors="pt").pixel_values.to(self.device)
-        with torch.no_grad(), torch.autocast("cuda"):
-            depth_map = self.depth_estimator(image).predicted_depth
+    # def get_depth_map(self, image) -> PIL.Image :
+    #     image = self.imgProcessor(images=image, return_tensors="pt").pixel_values.to("cuda")
+    #     with torch.no_grad(), torch.autocast("cuda"):
+    #         depth_map = self.depth_estimator(image).predicted_depth
 
-        depth_map = torch.nn.functional.interpolate(
-            depth_map.unsqueeze(1),
-            size=(1024, 1024),
-            mode="bicubic",
-            align_corners=False,
-        )
-        depth_min = torch.amin(depth_map, dim=[1, 2, 3], keepdim=True)
-        depth_max = torch.amax(depth_map, dim=[1, 2, 3], keepdim=True)
-        depth_map = (depth_map - depth_min) / (depth_max - depth_min)
-        image = torch.cat([depth_map] * 3, dim=1)
+    #     depth_map = torch.nn.functional.interpolate(
+    #         depth_map.unsqueeze(1),
+    #         size=(1024, 1024),
+    #         mode="bicubic",
+    #         align_corners=False,
+    #     )
+    #     depth_min = torch.amin(depth_map, dim=[1, 2, 3], keepdim=True)
+    #     depth_max = torch.amax(depth_map, dim=[1, 2, 3], keepdim=True)
+    #     depth_map = (depth_map - depth_min) / (depth_max - depth_min)
+    #     image = torch.cat([depth_map] * 3, dim=1)
 
-        image = image.permute(0, 2, 3, 1).cpu().numpy()[0]
-        image = Image.fromarray((image * 255.0).clip(0, 255).astype(np.uint8))
-        return image
+    #     image = image.permute(0, 2, 3, 1).cpu().numpy()[0]
+    #     image = Image.fromarray((image * 255.0).clip(0, 255).astype(np.uint8))
+    #     return image
     
     def __call__(
         self,
         rgb: Float[Tensor, "B H W C"],
+        condition_image: PIL.Image,
         prompt,
         # prompt_embeds: Optional[torch.FloatTensor],
         # negative_prompt_embeds: Optional[torch.FloatTensor],
@@ -125,9 +127,11 @@ class XLContrlnetGuidanceImage(BaseObject):
         generated_image: PIL.Image = None,
         **kwargs,
     ):
-        image_inp = rgb.squeeze()
+        image_inp = rgb.squeeze().to(dtype=self.weights_dtype)
         if regen: 
-            depth_PIL = self.get_depth_map(image_inp)
+            # depth_PIL = self.get_depth_map(image_inp)
+            depth_PIL = condition_image
+            
             # if self.cfg.save_depth_map:
             #     self.save_grayscale_image(, "depth_map")
             
@@ -154,7 +158,7 @@ class XLContrlnetGuidanceImage(BaseObject):
         guidance_out = {
             "loss_l1": Ll1_loss,
             "loss_ssim": ssim_loss,
-            "estimate_depth_PIL": depth_PIL if regen else None,
+            # "estimate_depth_PIL": depth_PIL if regen else None,
             "gen_image_PIL": gen_image_PIL
         }
         return guidance_out

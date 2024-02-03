@@ -36,8 +36,9 @@ system:
   geometry_type: "gaussian-splatting"
   geometry:
     max_num: 1000000 #8000000 # 500000 is original, max number of points
-    position_lr: [0, 0.00016, 0.0000016, 1760] # [0, 0.001, 0.00002, 1000] [start_step, start_value, end_value, end_step] will multiply by 10 at create_from_pcd
-    scale_lr: 0.005   # 0.005
+    # position_lr: [0, 0.00016\, 0.0000016, 1760] # [0, 0.001, 0.00002, 1000] [start_step, start_value, end_value, end_step] will multiply by 10 at create_from_pcd
+    position_lr : 0.000
+    scale_lr: 0.000   # 0.005
     feature_lr: 0.0025 # 0.01
     opacity_lr: 0.05 # 0.05
     rotation_lr: 0.001 # 0.005
@@ -85,7 +86,7 @@ system:
   guidance:
     pretrained_model_name_or_path: "/remote-home/hzp/Models/stabilityai/stable-diffusion-xl-base-1.0" 
     controlnet_name_or_path: "/remote-home/hzp/Models/diffusers/controlnet-depth-sdxl-1.0" 
-    half_precision_weights: false
+    half_precision_weights: true
     conditioning_scale: 0.55 # Depth conditioning_scale
     random_seed: 978364352 # random seed to generate the image
     num_inference_steps: 30 # stable diffusion inference step num
@@ -110,10 +111,10 @@ system:
 
 
 trainer:
-  max_steps: 1760 # single iter count * camera positions count
+  max_steps: 600 # single iter count * camera positions count
   log_every_n_steps: 1
   num_sanity_val_steps: 0
-  val_check_interval: 100
+  val_check_interval: 400
   enable_progress_bar: true
   precision: 32-true
 

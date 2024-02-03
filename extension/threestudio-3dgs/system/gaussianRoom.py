@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 import os
 import numpy as np
+from sympy import false
 import torch
 from PIL import Image
 from random import choice
@@ -19,8 +20,9 @@ class GaussianRoom(BaseLift3DSystem):
     class Config(BaseLift3DSystem.Config):
         # TODO: 写在配置文件中
         visualize_samples: bool = False
-        cam_path: str = "coarse_room/camera_config/camsInfo.pkl" 
-        single_iter: int = 10 # 每个角度迭代的次数
+        # cam_path: str = "coarse_room/camera_config/camsInfo.pkl" 
+        cam_path: str = "coarse_room/camera_config/panocamsInfo.pkl"
+        single_iter: int = 100 # 每个角度迭代的次数 # TODO: 写在配置文件中
         
     cfg: Config
     
@@ -36,8 +38,7 @@ class GaussianRoom(BaseLift3DSystem):
         self.prompt_utils = self.prompt_processor()
         self.cam_list = self.load_camera(self.cfg.cam_path)
         self.cam_iter_count = {i: 0 for i in range(len(self.cam_list["fovy"]))}
-        print("configure done")
-            
+        self.init = True
         
     def on_fit_start(self) -> None:
         super().on_fit_start()
@@ -75,12 +76,27 @@ class GaussianRoom(BaseLift3DSystem):
         opt = self.optimizers()
         
         # 每个视角的最多迭代次数
-        if len(self.cam_iter_count) != 0:
-            viewpoint_cam_idx = choice(list(self.cam_iter_count.keys()))
-            self.cam_iter_count[viewpoint_cam_idx] += 1
-            
-        if self.cam_iter_count[viewpoint_cam_idx] == self.cfg.single_iter:
-            del self.cam_iter_count[viewpoint_cam_idx]
+        if self.init:
+            if len(self.cam_iter_count) != 0:
+                viewpoint_cam_idx = choice(list(self.cam_iter_count.keys()))
+                self.cam_iter_count[viewpoint_cam_idx] += 1
+                if self.cam_iter_count[viewpoint_cam_idx] == 1:
+                    del self.cam_iter_count[viewpoint_cam_idx]
+            else:
+                self.cam_list = self.load_camera(self.cfg.cam_path)
+                self.cam_iter_count = {i: 0 for i in range(len(self.cam_list["fovy"]))}
+                self.init = False
+                
+                viewpoint_cam_idx = choice(list(self.cam_iter_count.keys()))
+                self.cam_iter_count[viewpoint_cam_idx] += 1
+                if self.cam_iter_count[viewpoint_cam_idx] == self.cfg.single_iter:
+                    del self.cam_iter_count[viewpoint_cam_idx]
+        else:     
+            if len(self.cam_iter_count) != 0:
+                viewpoint_cam_idx = choice(list(self.cam_iter_count.keys()))
+                self.cam_iter_count[viewpoint_cam_idx] += 1
+            if self.cam_iter_count[viewpoint_cam_idx] == self.cfg.single_iter:
+                del self.cam_iter_count[viewpoint_cam_idx]
             
         viewpoint_cam = {
             # 为了让BatchSize为1，所以unsqueeze
@@ -109,11 +125,21 @@ class GaussianRoom(BaseLift3DSystem):
             )
         
             self.save_colorized_depth(
-                filename=f"depth/{viewpoint_cam_idx}-depth.png", 
+                filename=f"depth-gray/{viewpoint_cam_idx}-depth.png", 
                 depth=out["comp_depth"].squeeze(),
+                cmap=None, # Jet is colorized, None is grayscale
             )
+            
+            self.save_colorized_depth(
+                filename=f"depth-jet/{viewpoint_cam_idx}-depth.png",
+                depth=out["comp_depth"].squeeze(),
+                cmap="jet", # Jet is colorized, None is grayscale
+            )
+            
+           
         
-        guidance_inp = out["comp_rgb"] # BHWC, c=3, [0, 1]
+        guidance_inp = out["comp_rgb"] # BHWC, c=3, [0, 1] # 利用渲染图片做深度预测
+        guidance_cond = Image.open(self.get_save_path(f"depth-gray/{viewpoint_cam_idx}-depth.png")) # 利用计算的深度做Condition
         regen = True if not os.path.exists(self.get_save_path(f"generated/{viewpoint_cam_idx}-rgb.png")) else False
         
         generated_image = None
@@ -122,7 +148,8 @@ class GaussianRoom(BaseLift3DSystem):
             generated_image = Image.open(self.get_save_path(f"generated/{viewpoint_cam_idx}-rgb.png")) 
         
         guidance_out = self.guidance(
-            rgb=guidance_inp, 
+            rgb=guidance_inp,
+            condition_image=guidance_cond, 
             prompt="A DSLR photo of a modern style livingroom, partial view",
             regen=regen,
             generated_image=generated_image,
@@ -134,12 +161,12 @@ class GaussianRoom(BaseLift3DSystem):
                 pil_image=guidance_out["gen_image_PIL"],
             )
             
-            self.save_PIL(
-                filename=f"generated/{viewpoint_cam_idx}-depth.png", 
-                pil_image=guidance_out["estimate_depth_PIL"],
-            )
+            # self.save_PIL(
+            #     filename=f"generated/{viewpoint_cam_idx}-depth.png", 
+            #     pil_image=guidance_out["estimate_depth_PIL"],
+            # )
         
-        
+        gt = torch.rand_like(guidance_inp)
         loss_img = 0.0
         # loss = 0.0
         
@@ -206,7 +233,6 @@ class GaussianRoom(BaseLift3DSystem):
         #     self.log(f"train_params/{name}", self.C(value))
             
             
-        # loss_sds.backward(retain_graph=True)
         loss_img.backward(retain_graph=True)
         # loss.backward(retain_graph=True)
         

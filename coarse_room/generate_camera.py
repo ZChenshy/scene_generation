@@ -67,7 +67,7 @@ def get_cam(bbox,
             height = 1024,
             width = 1024,
             sample_num = 20,
-            save_dir = './coarse_room/camera_config/camsInfo.pkl'):
+            save_dir = 'coarse_room/camera_config/camsInfo.pkl'):
     """
     传入参数：场景的bbox！！！（这个是必须的）
     其他：fovx，fovy(角度制);image_height，image_width。未传入将使用默认的。
@@ -132,6 +132,51 @@ def get_cam(bbox,
 
     return camdict
 
+
+def panorama_cameras(camerapositions, 
+                     fovx = 60, 
+                     fovy = 60 , 
+                     height = 1024,
+                     width = 1024,
+                     save_dir = 'coarse_room/camera_config/panocamsInfo.pkl'):
+    """
+    用于生成拼接相机。必须要传入的参数是camerapositions。
+    环绕场景旋转, 每次旋转的角度为fovx。
+    """
+    radius = 0.5
+    rot_angle = fovx * np.pi / 180
+    theta = np.linspace(0, 2 * np.pi, int(2 * np.pi / rot_angle ), endpoint=False)
+    angle_random = np.full_like(theta, np.random.rand(1) * np.pi /2) 
+    theta = (theta + angle_random)
+    camdict = {}
+    c2w_list = []
+    w2c_list = []
+    fovx_list = []
+    fovy_list = []
+    for rot in theta:
+        dis = np.array([radius * np.cos(rot), 0, radius * np.sin(rot)])
+        target_positions = camerapositions + dis
+        w2c, c2w = look_at(camerapositions, target_positions)
+        c2w_list.append(c2w)
+        w2c_list.append(w2c)
+        fovx_list.append(fovx)
+        fovy_list.append(fovy)     
+             
+    camdict = {
+        "c2w": c2w_list,
+        "w2c": w2c_list,
+        "fovx": fovx_list,
+        "fovy": fovy_list,
+        "width": width,
+        "height": height,
+    }
+
+    with open(save_dir, 'wb')as f:
+        pickle.dump(camdict,f)
+
+    return camdict
+
+
 if __name__ == '__main__':
    cams = get_cam(
        np.array([
@@ -139,4 +184,6 @@ if __name__ == '__main__':
            [ 0.81952091,  0.65031064,  1.45156923]
             ])
         )
+   panocam = panorama_cameras(np.array([0, 0, 0]))
+   print(len(panocam))
     
