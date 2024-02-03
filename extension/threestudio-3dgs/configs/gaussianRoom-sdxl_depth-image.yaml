@@ -3,7 +3,8 @@ tag: "${rmspace:${system.prompt_processor.prompt},_}"
 exp_root_dir: "outputs"
 seed: 0
  
-data_type: "random-outward-camera-datamodule" # 对应threeStudio/data/uncond_out.py
+# data_type: "random-outward-camera-datamodule" # 对应threeStudio/data/uncond_out.py
+data_type: "outward-camera-datamodule" # 对应threeStudio/data/outward.py
 
 data:
   batch_size: 1

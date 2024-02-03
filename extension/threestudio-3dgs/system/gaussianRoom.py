@@ -36,9 +36,6 @@ class GaussianRoom(BaseLift3DSystem):
             self.cfg.prompt_processor
         )
         self.prompt_utils = self.prompt_processor()
-        self.cam_list = self.load_camera(self.cfg.cam_path)
-        self.cam_iter_count = {i: 0 for i in range(len(self.cam_list["fovy"]))}
-        self.init = True
         
     def on_fit_start(self) -> None:
         super().on_fit_start()
@@ -76,99 +73,76 @@ class GaussianRoom(BaseLift3DSystem):
         opt = self.optimizers()
         
         # 每个视角的最多迭代次数
-        if self.init:
-            if len(self.cam_iter_count) != 0:
-                viewpoint_cam_idx = choice(list(self.cam_iter_count.keys()))
-                self.cam_iter_count[viewpoint_cam_idx] += 1
-                if self.cam_iter_count[viewpoint_cam_idx] == 1:
-                    del self.cam_iter_count[viewpoint_cam_idx]
-            else:
-                self.cam_list = self.load_camera(self.cfg.cam_path)
-                self.cam_iter_count = {i: 0 for i in range(len(self.cam_list["fovy"]))}
-                self.init = False
-                
-                viewpoint_cam_idx = choice(list(self.cam_iter_count.keys()))
-                self.cam_iter_count[viewpoint_cam_idx] += 1
-                if self.cam_iter_count[viewpoint_cam_idx] == self.cfg.single_iter:
-                    del self.cam_iter_count[viewpoint_cam_idx]
-        else:     
-            if len(self.cam_iter_count) != 0:
-                viewpoint_cam_idx = choice(list(self.cam_iter_count.keys()))
-                self.cam_iter_count[viewpoint_cam_idx] += 1
-            if self.cam_iter_count[viewpoint_cam_idx] == self.cfg.single_iter:
-                del self.cam_iter_count[viewpoint_cam_idx]
             
-        viewpoint_cam = {
-            # 为了让BatchSize为1，所以unsqueeze
-            "c2w": torch.tensor(self.cam_list["c2w"][viewpoint_cam_idx]).unsqueeze(0).to(self.device),
-            "w2c": torch.tensor(self.cam_list["w2c"][viewpoint_cam_idx]).unsqueeze(0).to(self.device),
-            "fovx": [self.cam_list["fovx"][viewpoint_cam_idx]],
-            "fovy": [self.cam_list["fovy"][viewpoint_cam_idx]],
-            "width": self.cam_list["width"],
-            "height": self.cam_list["height"]
-        }
         
-        out = self.forward(viewpoint_cam) # HWC
+        out = self.forward(batch) # HWC
 
         visibility_filter = out["visibility_filter"]
         radii = out["radii"]
         # out["comp_rgb"]  # BHWC, c=3, [0, 1]
         # out["comp_depth"]# BHWC, c=1, absolute depth, not normalized
         viewspace_point_tensor = out["viewspace_points"]
-    
-
-        if not os.path.exists(self.get_save_path(f"rendered/{viewpoint_cam_idx}-rgb.png")):
+        
+        cam_idx = batch["cam_idx"]
+        if not os.path.exists(self.get_save_path(f"rendered/{cam_idx}-rgb.png")):
             self.save_rgb_image(
-                f"rendered/{viewpoint_cam_idx}-rgb.png",
+                f"rendered/{cam_idx}-rgb.png",
                 img=out["comp_rgb"].squeeze(),
                 data_format="HWC",
             )
         
             self.save_colorized_depth(
-                filename=f"depth-gray/{viewpoint_cam_idx}-depth.png", 
+                filename=f"depth-gray/{cam_idx}-depth.png", 
                 depth=out["comp_depth"].squeeze(),
                 cmap=None, # Jet is colorized, None is grayscale
             )
             
             self.save_colorized_depth(
-                filename=f"depth-jet/{viewpoint_cam_idx}-depth.png",
+                filename=f"depth-jet/{cam_idx}-depth.png",
                 depth=out["comp_depth"].squeeze(),
                 cmap="jet", # Jet is colorized, None is grayscale
             )
             
-           
-        
         guidance_inp = out["comp_rgb"] # BHWC, c=3, [0, 1] # 利用渲染图片做深度预测
-        guidance_cond = Image.open(self.get_save_path(f"depth-gray/{viewpoint_cam_idx}-depth.png")) # 利用计算的深度做Condition
-        regen = True if not os.path.exists(self.get_save_path(f"generated/{viewpoint_cam_idx}-rgb.png")) else False
+        guidance_cond = Image.open(self.get_save_path(f"depth-gray/{cam_idx}-depth.png")) # 利用计算的深度做Condition
+        # regen = True if not os.path.exists(self.get_save_path(f"generated/{batch["cam_idx"]}-rgb.png")) else False # For image Guidance
         
-        generated_image = None
         
-        if not regen:
-            generated_image = Image.open(self.get_save_path(f"generated/{viewpoint_cam_idx}-rgb.png")) 
-        
-        guidance_out = self.guidance(
-            rgb=guidance_inp,
-            condition_image=guidance_cond, 
-            prompt="A DSLR photo of a modern style livingroom, partial view",
-            regen=regen,
-            generated_image=generated_image,
-        )
-        
-        if regen: 
-            self.save_PIL(
-                filename=f"generated/{viewpoint_cam_idx}-rgb.png", 
-                pil_image=guidance_out["gen_image_PIL"],
-            )
+        # For Image guidance
+        # generated_image = None
+        #
+        # if not regen:
+        #     generated_image = Image.open(self.get_save_path(f"generated/{viewpoint_cam_idx}-rgb.png")) 
+        # 
+        # guidance_out = self.guidance(
+        #     rgb=guidance_inp,
+        #     condition_image=guidance_cond, 
+        #     prompt="A DSLR photo of a modern style livingroom, partial view",
+        #     regen=regen,
+        #     generated_image=generated_image,
+        # )
+        #
+        # if regen: 
+        #     self.save_PIL(
+        #         filename=f"generated/{viewpoint_cam_idx}-rgb.png", 
+        #         pil_image=guidance_out["gen_image_PIL"],
+        #     )
             
             # self.save_PIL(
             #     filename=f"generated/{viewpoint_cam_idx}-depth.png", 
             #     pil_image=guidance_out["estimate_depth_PIL"],
             # )
         
-        gt = torch.rand_like(guidance_inp)
+        
+        # SDS Guidance
+        # input: BHWC, c=3, [0, 1]
+        # condition: PIL.Image
+        guidance_out = self.guidance(
+            guidance_inp, guidance_cond, self.prompt_utils, **batch, rgb_as_latents=False
+        )
+        
         loss_img = 0.0
-        # loss = 0.0
+        loss = 0.0
         
         self.log(
             "gauss_num",
@@ -185,56 +159,52 @@ class GaussianRoom(BaseLift3DSystem):
                     self.cfg.loss[name.replace("loss_", "lambda_")]
                 ) # 包括l1 SSIM
                 self.log(f"train/{name}", value)
-        #     elif name == "estimate_depth_PIL":
-        #         value.save(self.get_save_path(f"{name}/{self.true_global_step}.png"))
-        #     elif name == "gen_image_PIL":
-        #         value.save(self.get_save_path(f"{name}/{self.true_global_step}.png"))
                 
                 
-        # xyz_mean = None
-        # if self.cfg.loss["lambda_position"] > 0.0:
-        #     xyz_mean = self.geometry.get_xyz.norm(dim=-1)
-        #     loss_position = xyz_mean.mean()
-        #     self.log(f"train/loss_position", loss_position)
-        #     loss += self.C(self.cfg.loss["lambda_position"]) * loss_position
+        xyz_mean = None
+        if self.cfg.loss["lambda_position"] > 0.0:
+            xyz_mean = self.geometry.get_xyz.norm(dim=-1)
+            loss_position = xyz_mean.mean()
+            self.log(f"train/loss_position", loss_position)
+            loss += self.C(self.cfg.loss["lambda_position"]) * loss_position
 
-        # if self.cfg.loss["lambda_opacity"] > 0.0:
-        #     scaling = self.geometry.get_scaling.norm(dim=-1)
-        #     loss_opacity = (
-        #         scaling.detach().unsqueeze(-1) * self.geometry.get_opacity
-        #     ).sum()
-        #     self.log(f"train/loss_opacity", loss_opacity)
-        #     loss += self.C(self.cfg.loss["lambda_opacity"]) * loss_opacity
+        if self.cfg.loss["lambda_opacity"] > 0.0:
+            scaling = self.geometry.get_scaling.norm(dim=-1)
+            loss_opacity = (
+                scaling.detach().unsqueeze(-1) * self.geometry.get_opacity
+            ).sum()
+            self.log(f"train/loss_opacity", loss_opacity)
+            loss += self.C(self.cfg.loss["lambda_opacity"]) * loss_opacity
 
-        # if self.cfg.loss["lambda_scales"] > 0.0:
-        #     scale_sum = torch.sum(self.geometry.get_scaling)
-        #     self.log(f"train/scales", scale_sum)
-        #     loss += self.C(self.cfg.loss["lambda_scales"]) * scale_sum
+        if self.cfg.loss["lambda_scales"] > 0.0:
+            scale_sum = torch.sum(self.geometry.get_scaling)
+            self.log(f"train/scales", scale_sum)
+            loss += self.C(self.cfg.loss["lambda_scales"]) * scale_sum
 
-        # if self.cfg.loss["lambda_tv_loss"] > 0.0:
-        #     loss_tv = self.C(self.cfg.loss["lambda_tv_loss"]) * tv_loss(
-        #         out["comp_rgb"].permute(0, 3, 1, 2)
-        #     )
-        #     self.log(f"train/loss_tv", loss_tv)
-        #     loss += loss_tv
+        if self.cfg.loss["lambda_tv_loss"] > 0.0:
+            loss_tv = self.C(self.cfg.loss["lambda_tv_loss"]) * tv_loss(
+                out["comp_rgb"].permute(0, 3, 1, 2)
+            )
+            self.log(f"train/loss_tv", loss_tv)
+            loss += loss_tv
             
-        # if (
-        #     out.__contains__("comp_depth")
-        #     and self.cfg.loss["lambda_depth_tv_loss"] > 0.0
-        # ):
-        #     loss_depth_tv = self.C(self.cfg.loss["lambda_depth_tv_loss"]) * (
-        #         # tv_loss(out["comp_normal"].permute(0, 3, 1, 2)) # ! 这里的comp_normal是怎么得到的
-        #         tv_loss(out["comp_depth"].permute(0, 3, 1, 2))
-        #     )
-        #     self.log(f"train/loss_depth_tv", loss_depth_tv)
-        #     loss += loss_depth_tv
+        if (
+            out.__contains__("comp_depth")
+            and self.cfg.loss["lambda_depth_tv_loss"] > 0.0
+        ):
+            loss_depth_tv = self.C(self.cfg.loss["lambda_depth_tv_loss"]) * (
+                # tv_loss(out["comp_normal"].permute(0, 3, 1, 2)) # ! 这里的comp_normal是怎么得到的
+                tv_loss(out["comp_depth"].permute(0, 3, 1, 2))
+            )
+            self.log(f"train/loss_depth_tv", loss_depth_tv)
+            loss += loss_depth_tv
 
-        # for name, value in self.cfg.loss.items():
-        #     self.log(f"train_params/{name}", self.C(value))
+        for name, value in self.cfg.loss.items():
+            self.log(f"train_params/{name}", self.C(value))
             
             
-        loss_img.backward(retain_graph=True)
-        # loss.backward(retain_graph=True)
+        loss_img.backward(retain_graph=True) # SDS Or ImageGuidance Loss
+        loss.backward(retain_graph=True)
         
         iteration = self.global_step
         self.geometry.update_states(
@@ -244,13 +214,12 @@ class GaussianRoom(BaseLift3DSystem):
             viewspace_point_tensor,
         )
         
-        # if loss > 0:
-        #     loss.backward()
+        if loss > 0:
+            loss.backward()
         opt.step()
         opt.zero_grad(set_to_none=True)
 
-        # return {"loss": loss_sds}
-        return {"loss": loss_img}
+        return {"loss": loss_img} # SDS Or Image Guidace Loss
             
     
     def validation_step(self, batch, batch_idx):

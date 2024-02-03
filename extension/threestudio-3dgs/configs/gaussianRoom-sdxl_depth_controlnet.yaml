@@ -3,7 +3,7 @@ tag: "${rmspace:${system.prompt_processor.prompt},_}"
 exp_root_dir: "outputs"
 seed: 0
  
-data_type: "random-outward-camera-datamodule" # 对应threeStudio/data/uncond_out.py
+data_type: "outward-camera-datamodule" # 对应threeStudio/data/outward.py
 
 data:
   batch_size: 1
@@ -51,11 +51,12 @@ system:
     densify_grad_threshold: 0.0002 #0.01 #original gaussian splatting is 0.0002
     min_opac_prune: 0.005
     split_thresh: 0.02
+    opacity_init: 1.0
 
     prune_big_points: false # default: false #! 设置为True后，地板会变黑？
     radii2d_thresh: 1000 #1000
 
-    geometry_convert_from: "/remote-home/share/room_gen/roomPCD/4944051f-3a7e-4387-b5f3-f925ae6da57e/LivingRoom-4719/scene_pcd_whole_wall.ply" #TODO: Auto connect to scene pcd 
+    geometry_convert_from: "coarse_room/scene_pcd_semantic_wall.ply" #TODO: Auto connect to scene pcd 
     load_ply_only_vertex: True #! 仅加载点云中的点位置，颜色随机初始化
 
 
@@ -74,15 +75,15 @@ system:
 
   prompt_processor_type: "stable-diffusion-xl-prompt-processor" 
   prompt_processor:
-    pretrained_model_name_or_path: "/remote-home/share/Models/stabilityai/stable-diffusion-xl-base-1.0"
+    pretrained_model_name_or_path: "/remote-home/hzp/Models/stabilityai/stable-diffusion-xl-base-1.0"
     prompt: ???
     negative_prompt: "unrealistic, over-saturated, Animation style"
 
 
   guidance_type: "stable-diffusion-xl-depth-controlnet-guidance" 
   guidance:
-    pretrained_model_name_or_path: "/remote-home/share/Models/stabilityai/stable-diffusion-xl-base-1.0" 
-    controlnet_name_or_path: "/remote-home/share/Models/diffusers/controlnet-depth-sdxl-1.0" 
+    pretrained_model_name_or_path: "/remote-home/hzp/Models/stabilityai/stable-diffusion-xl-base-1.0" 
+    controlnet_name_or_path: "/remote-home/hzp/Models/diffusers/controlnet-depth-sdxl-1.0" 
     half_precision_weights: false
     guidance_scale: 100 # 7.5 for csd
     condition_scale: 0.75 # Depth conditioning_scale
@@ -109,10 +110,10 @@ system:
 
 
 trainer:
-  max_steps: 2000
+  max_steps: 8800
   log_every_n_steps: 1
   num_sanity_val_steps: 0
-  val_check_interval: 100
+  val_check_interval: 400
   enable_progress_bar: true
   precision: 32-true
 

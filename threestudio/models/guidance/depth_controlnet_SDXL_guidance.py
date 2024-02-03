@@ -1,7 +1,9 @@
 from dataclasses import dataclass
+import PIL
 
 import torch
 import torch.nn.functional as F
+from torchvision import transforms
 from diffusers import StableDiffusionXLControlNetPipeline, ControlNetModel, AutoencoderKL, DDIMScheduler
 from diffusers.utils.import_utils import is_xformers_available
 
@@ -54,6 +56,7 @@ class XLContrlnetGuidance(BaseObject):
             torch.bfloat16 if self.cfg.half_precision_weights else torch.float32
         )
         
+        self.transform = transforms.ToTensor()
         controlnet = ControlNetModel.from_pretrained(
             self.cfg.controlnet_name_or_path,
             torch_dtype=self.weights_dtype, 
@@ -140,7 +143,6 @@ class XLContrlnetGuidance(BaseObject):
         return add_time_ids
     
     
-    # TODO: 使得输入的深度图像的像素值范围为[0, 1]，同时使近距离的区域像素值更大，远距离的区域像素值更小（与Gaussian渲染的深度进行结合）
     def normalized_image(self, image: Float[Tensor, "B H W C"]) -> Float[Tensor, "B C H W"]:
         image = image.permute(0, 3, 1, 2)
         min_values = torch.amin(image, dim=[2, 3], keepdim=True)
@@ -291,15 +293,16 @@ class XLContrlnetGuidance(BaseObject):
     def __call__(
         self,
         rgb: Float[Tensor, "B H W C"],
-        image_cond: Float[Tensor, "B H W C"],
+        image_cond: PIL.Image,
         prompt_utils: XLPromptProcessorOutput,
         rgb_as_latents=False,
         **kwargs,
     ):
+        if image_cond is not None:
+            image_cond = self.transform(image_cond).unsqueeze(0).to(device=self.device, dtype=self.weights_dtype) # BCHW
+            
         batch_size = rgb.shape[0] 
         assert batch_size > 0
-        if not rgb_as_latents:
-            assert (rgb.shape[1], rgb.shape[2]) == (image_cond.shape[1], image_cond.shape[2])
         assert len(rgb.shape) == len(image_cond.shape) == 4
         
         rgb = torch.clamp(rgb, 0, 1)
@@ -321,7 +324,7 @@ class XLContrlnetGuidance(BaseObject):
             )
             latents = self.encode_images(rgb_BCHW_1024)
             
-        depth_BCHW = self.normalized_image(image_cond)
+        depth_BCHW = image_cond
         if depth_BCHW.shape[1] == 1:
             depth_BCHW = torch.cat([depth_BCHW] * 3, dim=1)
         elif depth_BCHW.shape[1] == 3:

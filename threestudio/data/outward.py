@@ -345,7 +345,7 @@ class RandomCameraDataModule(pl.LightningDataModule):
 
     def setup(self, stage=None) -> None:
         if stage in [None, "fit"]:
-            self.train_dataset = RandomCameraIterableDatasetCustom(self.cfg)
+            self.train_dataset = RandomCameraIterableDatasetSingle(self.cfg)
         if stage in [None, "fit", "validate"]:
             self.val_dataset = RandomCameraDataset(self.cfg, "val")
         if stage in [None, "test", "predict"]:
@@ -385,11 +385,12 @@ class RandomCameraDataModule(pl.LightningDataModule):
             self.test_dataset, batch_size=1, collate_fn=self.test_dataset.collate
         )
     
-class RandomCameraIterableDatasetCustom(IterableDataset, Updateable):
+class RandomCameraIterableDatasetSingle(IterableDataset, Updateable):
     """
     具体实现在collate
     """
-    def get_panorama_cameras(
+    def _get_panorama_cameras(
+        self,
         camerapositions, 
         fovx = 60, 
         fovy = 60 , 
@@ -434,13 +435,16 @@ class RandomCameraIterableDatasetCustom(IterableDataset, Updateable):
 
         return camdict
     
-    def get_cam(bbox, 
+    def _get_cam( 
+            self,
+            bbox,
             fovx = 60 , 
             fovy = 60 , 
             height = 1024,
             width = 1024,
             sample_num = 20,
-            save_dir = 'coarse_room/camera_config/camsInfo.pkl'):
+            save_dir = 'coarse_room/camera_config/camsInfo.pkl'
+        ):
         """
         传入参数：场景的bbox！！！（这个是必须的）
         其他：fovx，fovy(角度制);image_height，image_width。未传入将使用默认的。
@@ -460,6 +464,7 @@ class RandomCameraIterableDatasetCustom(IterableDataset, Updateable):
         将这个矩形的四个顶点作为相机观察的目标点。此外，我们还额外将对角线交点也作为相机观察
         的目标点。
         """
+        
         fovx = fovx * np.pi /180
         fovy = fovy * np.pi /180
 
@@ -508,16 +513,16 @@ class RandomCameraIterableDatasetCustom(IterableDataset, Updateable):
     def __init__(self, cfg: Any) -> None:
         super().__init__()
         self.cfg: RandomCameraDataModuleConfig = cfg
-        self.camDict = self.get_cam(
-       np.array([
-           [-0.9685008 ,  0.05031064, -1.3602995 ],
-           [ 0.81952091,  0.65031064,  1.45156923]
-            ])
-        )
+        
+        self.camDict = self._get_cam(bbox=np.array([
+                [-0.9685008 ,  0.05031064, -1.3602995 ],
+                [ 0.81952091,  0.65031064,  1.45156923],
+            ]))
         # TODO：在这里写入相机的位置信息，房间的BBOX
-        self.panocamDict = self.get_panorama_cameras(np.array([0, 0, 0]))
+        self.panocamDict = self._get_panorama_cameras(camerapositions=np.array([0, 0, 0]))
         self.init = True # 用于控制是否是第一次迭代，第一次迭代时，将所有位置的深度图进行渲染
-        self.cam_iter_count = {i: 0 for i in range(len(self.cam_list["fovy"]))}
+        self.single_iter = 100 # 每个角度对应的相机参数的返回次数
+        self.cam_iter_count = {i: 0 for i in range(len(self.camDict["fovy"]))} 
 
     def __iter__(self):
         while True:
@@ -531,28 +536,28 @@ class RandomCameraIterableDatasetCustom(IterableDataset, Updateable):
                 if self.cam_iter_count[viewpoint_cam_idx] == 1:
                     del self.cam_iter_count[viewpoint_cam_idx]
             else:
-                self.cam_list = self.load_camera(self.cfg.cam_path)
-                self.cam_iter_count = {i: 0 for i in range(len(self.cam_list["fovy"]))}
+                self.cam_iter_count = {i: 0 for i in range(len(self.camDict["fovy"]))}
                 self.init = False
                 
                 viewpoint_cam_idx = choice(list(self.cam_iter_count.keys()))
                 self.cam_iter_count[viewpoint_cam_idx] += 1
-                if self.cam_iter_count[viewpoint_cam_idx] == self.cfg.single_iter:
+                if self.cam_iter_count[viewpoint_cam_idx] == self.single_iter:
                     del self.cam_iter_count[viewpoint_cam_idx]
         else:     
             if len(self.cam_iter_count) != 0:
                 viewpoint_cam_idx = choice(list(self.cam_iter_count.keys()))
                 self.cam_iter_count[viewpoint_cam_idx] += 1
-            if self.cam_iter_count[viewpoint_cam_idx] == self.cfg.single_iter:
+            if self.cam_iter_count[viewpoint_cam_idx] == self.single_iter:
                 del self.cam_iter_count[viewpoint_cam_idx]
                 
         return {
-            "c2w": torch.tensor(self.cam_list["c2w"][viewpoint_cam_idx]).unsqueeze(0).to(self.device),
-            "w2c": torch.tensor(self.cam_list["w2c"][viewpoint_cam_idx]).unsqueeze(0).to(self.device),
-            "fovx": [self.cam_list["fovx"][viewpoint_cam_idx]],
-            "fovy": [self.cam_list["fovy"][viewpoint_cam_idx]],
-            "width": self.cam_list["width"],
-            "height": self.cam_list["height"]
+            "c2w": torch.tensor(self.camDict["c2w"][viewpoint_cam_idx]).unsqueeze(0).to(device=get_device()),
+            "w2c": torch.tensor(self.camDict["w2c"][viewpoint_cam_idx]).unsqueeze(0).to(device=get_device()),
+            "fovx": [self.camDict["fovx"][viewpoint_cam_idx]],
+            "fovy": [self.camDict["fovy"][viewpoint_cam_idx]],
+            "width": self.camDict["width"],
+            "height": self.camDict["height"],
+            "cam_idx": viewpoint_cam_idx
         }
         
     
