@@ -1,8 +1,7 @@
 import bisect
 import math
-import random
 from dataclasses import dataclass, field
-
+import numpy as np
 import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
@@ -21,8 +20,6 @@ from threestudio.utils.ops import (
 )
 from threestudio.utils.typing import *
 
-import os
-import numpy as np
 
 def safe_normalize(x, eps=1e-20):
     return x / torch.sqrt(torch.clamp(torch.sum(x * x, -1, keepdim=True), min=eps))
@@ -39,7 +36,7 @@ rot_phi = lambda phi : torch.Tensor([
     [0,np.sin(phi), np.cos(phi),0],
     [0,0,0,1]]).float()
 
-rot_theta = lambda th : torch.Tensor([
+rot_theta = lambda th : torch.Tensor([ 
     [np.cos(th),0,-np.sin(th),0],
     [0,1,0,0],
     [np.sin(th),0, np.cos(th),0],
@@ -635,7 +632,6 @@ class RandomCameraIterableDatasetCustom(IterableDataset, Updateable):
         )  # FIXME: hard-coded near and far
         mvp_mtx: Float[Tensor, "B 4 4"] = get_mvp_matrix(c2w, self.proj_mtx)
         self.fovy = fovy
-
         return {
             "mvp_mtx": mvp_mtx,
             "camera_positions": camera_positions,
