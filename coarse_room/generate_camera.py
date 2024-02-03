@@ -186,4 +186,6 @@ if __name__ == '__main__':
         )
    panocam = panorama_cameras(np.array([0, 0, 0]))
    print(len(panocam))
+   panocam = panorama_cameras(np.array([0, 0, 0]))
+   print(len(panocam))
     
